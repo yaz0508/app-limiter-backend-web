@@ -18,18 +18,29 @@ const apiRequest = async <T>(path: string, options: Options = {}): Promise<T> =>
     headers.Authorization = `Bearer ${options.token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
 
-  if (!res.ok) {
-    const message = (await res.json().catch(() => ({}))).message || res.statusText;
-    throw new Error(message);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      const message = errorData.message || res.statusText || `Request failed with status ${res.status}`;
+      throw new Error(message);
+    }
+
+    return res.json();
+  } catch (error) {
+    // Handle network errors (CORS, connection refused, etc.)
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new Error(
+        `Network error: Unable to connect to the server. Please check if the backend is running at ${API_URL}`
+      );
+    }
+    throw error;
   }
-
-  return res.json();
 };
 
 export const loginRequest = (email: string, password: string) =>
