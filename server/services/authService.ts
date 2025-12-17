@@ -1,10 +1,10 @@
 import { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { prisma } from "../prisma/client";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "change-me";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "7d";
+const JWT_SECRET = process.env.JWT_SECRET || "change-me";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS ?? 10);
 
 export const hashPassword = async (password: string) => {
@@ -20,7 +20,9 @@ export const generateToken = (payload: {
   email: string;
   role: Role;
 }) => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
+  } as SignOptions);
 };
 
 export const validateUserCredentials = async (
