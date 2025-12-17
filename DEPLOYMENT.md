@@ -83,10 +83,13 @@ Should return: `{"status":"ok"}`
 In the **Environment Variables** section, add:
 
 ```
-VITE_API_URL=https://your-render-url.onrender.com/api
+VITE_API_URL=https://your-render-url.onrender.com
 ```
 
-**Replace `your-render-url.onrender.com` with your actual Render backend URL!**
+**Important:** 
+- Replace `your-render-url.onrender.com` with your actual Render backend URL
+- **Do NOT include `/api` at the end** - the code automatically appends it
+- Example: `https://digital-wellbeing-api.onrender.com` (not `...onrender.com/api`)
 
 ### 2.4 Deploy
 
