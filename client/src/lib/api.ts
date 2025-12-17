@@ -1,6 +1,8 @@
 import { DailyUsageSummary, Device, Limit, User, WeeklyUsageSummary } from "../types";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+// Ensure API_URL ends with /api, but handle cases where it might already include it
+const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_URL = baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
 
 type Options = {
   method?: string;
