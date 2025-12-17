@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: digital-wellbeing-api
+    env: node
+    rootDirectory: server
+    buildCommand: "npm install && npx prisma generate && npm run build"
+    startCommand: "npm start"
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: "7d"
+      - key: BCRYPT_SALT_ROUNDS
+        value: "10"
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: INGESTION_API_KEY
+        sync: false
+

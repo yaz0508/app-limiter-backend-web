@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PARENT
+  USER
+}
+
+model User {
+  id           String      @id @map("_id") @default(auto()) @db.ObjectId
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         Role        @default(PARENT)
+  devices      Device[]
+  createdLimits Limit[]    @relation("UserCreatedLimits")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  usageLogs    UsageLog[]  @relation("UserUsageLogs")
+}
+
+model Device {
+  id               String      @id @map("_id") @default(auto()) @db.ObjectId
+  name             String
+  os               String?
+  deviceIdentifier String      @unique
+  user             User        @relation(fields: [userId], references: [id])
+  userId           String      @db.ObjectId
+  limits           Limit[]
+  usageLogs        UsageLog[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([userId])
+}
+
+model App {
+  id          String      @id @map("_id") @default(auto()) @db.ObjectId
+  name        String
+  packageName String      @unique
+  limits      Limit[]
+  usageLogs   UsageLog[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Limit {
+  id                String      @id @map("_id") @default(auto()) @db.ObjectId
+  device            Device      @relation(fields: [deviceId], references: [id])
+  deviceId          String      @db.ObjectId
+  app               App         @relation(fields: [appId], references: [id])
+  appId             String      @db.ObjectId
+  dailyLimitMinutes Int
+  createdBy         User        @relation("UserCreatedLimits", fields: [createdById], references: [id])
+  createdById       String      @db.ObjectId
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@unique([deviceId, appId])
+  @@index([deviceId])
+  @@index([appId])
+}
+
+model UsageLog {
+  id              String    @id @map("_id") @default(auto()) @db.ObjectId
+  device          Device    @relation(fields: [deviceId], references: [id])
+  deviceId        String    @db.ObjectId
+  app             App       @relation(fields: [appId], references: [id])
+  appId           String    @db.ObjectId
+  user            User?     @relation("UserUsageLogs", fields: [userId], references: [id])
+  userId          String?   @db.ObjectId
+  durationSeconds Int
+  occurredAt      DateTime
+  createdAt       DateTime  @default(now())
+
+  @@index([deviceId, occurredAt])
+  @@index([appId, occurredAt])
+}
+
+

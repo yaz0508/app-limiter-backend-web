@@ -1,0 +1,61 @@
+import { Request, Response } from "express";
+import {
+  createDevice,
+  deleteDevice,
+  getDeviceForRequester,
+  listDevicesForRequester,
+  updateDevice,
+} from "../services/deviceService";
+
+export const list = async (req: Request, res: Response) => {
+  const devices = await listDevicesForRequester(req.user!);
+  res.json({ devices });
+};
+
+export const get = async (req: Request, res: Response) => {
+  try {
+    const device = await getDeviceForRequester(req.params.id, req.user!);
+    if (!device) return res.status(404).json({ message: "Device not found" });
+    res.json({ device });
+  } catch (err) {
+    if ((err as Error).message === "Forbidden") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    throw err;
+  }
+};
+
+export const create = async (req: Request, res: Response) => {
+  const { name, os, deviceIdentifier, userId } = req.body;
+  const device = await createDevice(
+    { name, os, deviceIdentifier, userId },
+    req.user!
+  );
+  res.status(201).json({ device });
+};
+
+export const update = async (req: Request, res: Response) => {
+  try {
+    const device = await updateDevice(req.params.id, req.body, req.user!);
+    res.json({ device });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "NotFound") return res.status(404).json({ message: "Device not found" });
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+export const remove = async (req: Request, res: Response) => {
+  try {
+    await deleteDevice(req.params.id, req.user!);
+    res.status(204).send();
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "NotFound") return res.status(404).json({ message: "Device not found" });
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+
