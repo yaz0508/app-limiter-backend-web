@@ -18,17 +18,29 @@ const port = process.env.PORT || 4000;
 
 const corsOrigin = process.env.CORS_ORIGIN;
 
-app.use(
-  cors({
-    // If CORS_ORIGIN is "*", allow all; if comma-separated list, restrict; otherwise default allow all
-    origin: corsOrigin
-      ? corsOrigin === "*" || corsOrigin === "true"
-        ? true
-        : corsOrigin.split(",")
-      : true,
-    credentials: true,
-  })
-);
+// Configure CORS: allow all if "*" or "true", otherwise use comma-separated list, default to allow all
+let corsConfig: cors.CorsOptions = {
+  credentials: true,
+};
+
+if (corsOrigin) {
+  const normalizedOrigin = corsOrigin.trim();
+  if (normalizedOrigin === "*" || normalizedOrigin === "true" || normalizedOrigin === "") {
+    corsConfig.origin = true; // Allow all origins
+  } else {
+    corsConfig.origin = normalizedOrigin.split(",").map((origin) => origin.trim());
+  }
+} else {
+  corsConfig.origin = true; // Default: allow all origins
+}
+
+// Log CORS configuration
+console.log("CORS Configuration:", {
+  CORS_ORIGIN: corsOrigin || "(not set - allowing all)",
+  allowedOrigins: corsConfig.origin === true ? "all origins" : corsConfig.origin,
+});
+
+app.use(cors(corsConfig));
 app.use(helmet());
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));

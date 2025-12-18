@@ -72,7 +72,7 @@ If your Render service is on the free tier, it might be "sleeping":
 - **Solution:** Wait 30-60 seconds for first request, or upgrade Render plan
 
 **Issue:** CORS error
-- **Solution:** Ensure `CORS_ORIGIN=*` in Render environment variables
+- **Solution:** See detailed CORS fix instructions below
 
 **Issue:** 404 on API endpoints
 - **Solution:** Verify backend routes are deployed correctly
@@ -94,4 +94,62 @@ curl -X POST https://your-render-url.onrender.com/api/auth/login
 
 If you get 404, the backend routes aren't working.
 If you get 400, the backend is working (400 is expected without body).
+
+---
+
+## Issue: CORS Error
+
+If you see: `CORS error: The backend at https://... is blocking requests from this origin.`
+
+### Quick Fix: Update CORS_ORIGIN on Render
+
+1. Go to https://dashboard.render.com
+2. Click on your backend web service
+3. Go to **Environment** tab
+4. Find the `CORS_ORIGIN` environment variable
+5. **Set it to one of these values:**
+
+   **Option A: Allow all origins (recommended for development)**
+   ```
+   CORS_ORIGIN=*
+   ```
+
+   **Option B: Allow specific origins (recommended for production)**
+   ```
+   CORS_ORIGIN=https://your-vercel-app.vercel.app,https://www.your-domain.com
+   ```
+   - Use comma-separated list for multiple origins
+   - Include protocol (`https://`)
+   - No trailing slashes
+
+6. **Save** the environment variable
+7. Render will automatically redeploy (or manually trigger redeploy if needed)
+8. Wait for deployment to complete (2-5 minutes)
+
+### Verify CORS is Working
+
+After redeploy, check the backend logs in Render:
+1. Go to your service → **Logs** tab
+2. Look for: `CORS Configuration: { CORS_ORIGIN: '*', allowedOrigins: 'all origins' }`
+3. This confirms CORS is configured correctly
+
+### Test CORS from Browser
+
+1. Open your frontend app
+2. Open browser DevTools (F12) → **Network** tab
+3. Try to log in
+4. Check the request headers:
+   - Look for `Access-Control-Allow-Origin` header in the response
+   - It should match your frontend origin or be `*`
+
+### Common CORS Issues
+
+**Issue:** CORS_ORIGIN is set to a specific URL but doesn't match frontend
+- **Solution:** Either set to `*` or add your frontend URL to the comma-separated list
+
+**Issue:** CORS_ORIGIN has extra spaces or quotes
+- **Solution:** Remove quotes and spaces - just the value: `*` or `https://example.com`
+
+**Issue:** CORS works in browser but not in production
+- **Solution:** Check that the frontend URL in CORS_ORIGIN exactly matches (including https/http, www/non-www)
 
