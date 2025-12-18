@@ -19,29 +19,51 @@ const port = process.env.PORT || 4000;
 const corsOrigin = process.env.CORS_ORIGIN;
 
 // Configure CORS: allow all if "*" or "true", otherwise use comma-separated list, default to allow all
+// Note: When credentials: true, we must use a function to dynamically set origin (can't use wildcard "*")
 let corsConfig: cors.CorsOptions = {
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["Content-Type"],
 };
 
 if (corsOrigin) {
   const normalizedOrigin = corsOrigin.trim();
   if (normalizedOrigin === "*" || normalizedOrigin === "true" || normalizedOrigin === "") {
-    corsConfig.origin = true; // Allow all origins
+    // When credentials: true, we need to use a function to allow all origins
+    // This dynamically returns the request origin, effectively allowing all
+    corsConfig.origin = (origin, callback) => {
+      callback(null, true); // Allow all origins
+    };
   } else {
     corsConfig.origin = normalizedOrigin.split(",").map((origin) => origin.trim());
   }
 } else {
-  corsConfig.origin = true; // Default: allow all origins
+  // Default: allow all origins (using function for credentials support)
+  corsConfig.origin = (origin, callback) => {
+    callback(null, true); // Allow all origins
+  };
 }
 
 // Log CORS configuration
 console.log("CORS Configuration:", {
   CORS_ORIGIN: corsOrigin || "(not set - allowing all)",
-  allowedOrigins: corsConfig.origin === true ? "all origins" : corsConfig.origin,
+  credentials: corsConfig.credentials,
+  methods: corsConfig.methods,
+  originType: typeof corsConfig.origin === "function" ? "dynamic (all)" : Array.isArray(corsConfig.origin) ? "specific origins" : "all",
 });
 
 app.use(cors(corsConfig));
-app.use(helmet());
+
+// Configure Helmet to work with CORS
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "unsafe-none" },
+  })
+);
+
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
 
