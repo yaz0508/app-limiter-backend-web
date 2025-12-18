@@ -31,17 +31,22 @@ if (corsOrigin) {
   const normalizedOrigin = corsOrigin.trim();
   if (normalizedOrigin === "*" || normalizedOrigin === "true" || normalizedOrigin === "") {
     // When credentials: true, we need to use a function to allow all origins
-    // This dynamically returns the request origin, effectively allowing all
+    // Return the origin that was requested (browser requirement when credentials: true)
     corsConfig.origin = (origin, callback) => {
-      callback(null, true); // Allow all origins
+      // When credentials are enabled, we must return the actual origin, not true
+      // This effectively allows all origins by returning whatever origin is requested
+      callback(null, origin || true);
     };
   } else {
-    corsConfig.origin = normalizedOrigin.split(",").map((origin) => origin.trim());
+    // Specific origins provided - use them directly
+    const allowedOrigins = normalizedOrigin.split(",").map((origin) => origin.trim());
+    corsConfig.origin = allowedOrigins;
   }
 } else {
   // Default: allow all origins (using function for credentials support)
   corsConfig.origin = (origin, callback) => {
-    callback(null, true); // Allow all origins
+    // Return the requested origin to allow all origins when credentials are enabled
+    callback(null, origin || true);
   };
 }
 

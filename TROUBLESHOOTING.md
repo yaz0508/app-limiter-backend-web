@@ -116,11 +116,16 @@ If you see: `CORS error: The backend at https://... is blocking requests from th
 
    **Option B: Allow specific origins (recommended for production)**
    ```
-   CORS_ORIGIN=https://your-vercel-app.vercel.app,https://www.your-domain.com
+   CORS_ORIGIN=https://app-limiter-backend-web.vercel.app
+   ```
+   Or for multiple origins:
+   ```
+   CORS_ORIGIN=https://app-limiter-backend-web.vercel.app,https://www.your-domain.com
    ```
    - Use comma-separated list for multiple origins
    - Include protocol (`https://`)
    - No trailing slashes
+   - **Important:** Match the exact frontend URL (including subdomain)
 
 6. **Save** the environment variable
 7. Render will automatically redeploy (or manually trigger redeploy if needed)
