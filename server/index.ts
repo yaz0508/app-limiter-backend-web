@@ -18,28 +18,18 @@ const port = process.env.PORT || 4000;
 
 const corsOrigin = process.env.CORS_ORIGIN;
 
-// Configure CORS before other middleware
-const corsOptions = {
-  // If CORS_ORIGIN is "*", allow all; if comma-separated list, restrict; otherwise default allow all
-  origin: corsOrigin
-    ? corsOrigin === "*" || corsOrigin === "true"
-      ? true
-      : corsOrigin.split(",").map((origin) => origin.trim())
-    : true,
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
-
-app.use(cors(corsOptions));
-
-// Configure Helmet with CORS-friendly settings
 app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-    crossOriginEmbedderPolicy: false,
+  cors({
+    // If CORS_ORIGIN is "*", allow all; if comma-separated list, restrict; otherwise default allow all
+    origin: corsOrigin
+      ? corsOrigin === "*" || corsOrigin === "true"
+        ? true
+        : corsOrigin.split(",")
+      : true,
+    credentials: true,
   })
 );
+app.use(helmet());
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
 

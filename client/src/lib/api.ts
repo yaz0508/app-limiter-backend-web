@@ -4,6 +4,12 @@ import { DailyUsageSummary, Device, Limit, User, WeeklyUsageSummary } from "../t
 const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const API_URL = baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
 
+// Log API URL in development for debugging
+if (import.meta.env.DEV) {
+  console.log("API Base URL:", baseUrl);
+  console.log("API URL:", API_URL);
+}
+
 type Options = {
   method?: string;
   token?: string | null;
@@ -26,19 +32,27 @@ const apiRequest = async <T>(path: string, options: Options = {}): Promise<T> =>
     });
 
     if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      const message = errorData.message || res.statusText || `Request failed with status ${res.status}`;
+      const message = (await res.json().catch(() => ({}))).message || res.statusText;
       throw new Error(message);
     }
 
     return res.json();
   } catch (error) {
-    // Handle network errors (CORS, connection refused, etc.)
-    if (error instanceof TypeError && error.message.includes("fetch")) {
+    // Handle network errors (connection refused, CORS, timeout, etc.)
+    if (
+      error instanceof TypeError ||
+      error instanceof DOMException ||
+      (error instanceof Error &&
+        (error.message.includes("fetch") ||
+          error.message.includes("network") ||
+          error.message.includes("Failed to fetch") ||
+          error.message.includes("NetworkError")))
+    ) {
       throw new Error(
         `Network error: Unable to connect to the server. Please check if the backend is running at ${API_URL}`
       );
     }
+    // Re-throw other errors as-is
     throw error;
   }
 };
