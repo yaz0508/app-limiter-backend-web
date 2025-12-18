@@ -8,6 +8,7 @@ const API_URL = baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
 if (import.meta.env.DEV) {
   console.log("API Base URL:", baseUrl);
   console.log("API URL:", API_URL);
+  console.log("VITE_API_URL env var:", import.meta.env.VITE_API_URL);
 }
 
 type Options = {
@@ -46,10 +47,21 @@ const apiRequest = async <T>(path: string, options: Options = {}): Promise<T> =>
         (error.message.includes("fetch") ||
           error.message.includes("network") ||
           error.message.includes("Failed to fetch") ||
-          error.message.includes("NetworkError")))
+          error.message.includes("NetworkError") ||
+          error.message.includes("CORS")))
     ) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const isCorsError = errorMsg.includes("CORS") ||
+        (error instanceof TypeError && errorMsg.includes("Failed to fetch"));
+
+      if (isCorsError) {
+        throw new Error(
+          `CORS error: The backend at ${API_URL} is blocking requests from this origin. Please check CORS_ORIGIN configuration on the backend.`
+        );
+      }
+
       throw new Error(
-        `Network error: Unable to connect to the server. Please check if the backend is running at ${API_URL}`
+        `Network error: Unable to connect to the server. Please check if the backend is running at ${API_URL}. If the backend is on Render free tier, it may be sleeping - wait 30-60 seconds and try again.`
       );
     }
     // Re-throw other errors as-is
