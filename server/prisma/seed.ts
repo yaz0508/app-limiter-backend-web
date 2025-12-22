@@ -11,22 +11,29 @@ async function main() {
 
   if (!email || !password) {
     console.log(
-      "Seed skipped: set ADMIN_EMAIL and ADMIN_PASSWORD to create an initial admin user."
+      "[SEED] Skipped: ADMIN_EMAIL and ADMIN_PASSWORD must be set to create an initial admin user."
     );
     return;
   }
 
-  const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS ?? 10);
-  const passwordHash = await bcrypt.hash(password, saltRounds);
+  console.log(`[SEED] Starting admin user creation for: ${email}`);
 
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: { name, passwordHash, role: "ADMIN" },
-    create: { email, name, passwordHash, role: "ADMIN" },
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
-  });
+  try {
+    const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS ?? 10);
+    const passwordHash = await bcrypt.hash(password, saltRounds);
 
-  console.log("Admin user ready:", { id: user.id, email: user.email, role: user.role });
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { name, passwordHash, role: "ADMIN" },
+      create: { email, name, passwordHash, role: "ADMIN" },
+      select: { id: true, email: true, name: true, role: true, createdAt: true },
+    });
+
+    console.log("[SEED] Admin user ready:", { id: user.id, email: user.email, role: user.role });
+  } catch (error) {
+    console.error("[SEED] Failed to create admin user:", error);
+    throw error;
+  }
 }
 
 main()
