@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import Table from "../components/Table";
 import UsageChart from "../components/UsageChart";
+import DateRangePicker from "../components/DateRangePicker";
 import { useAuth } from "../context/AuthContext";
-import { getDailyUsage, getDevices, getWeeklyUsage } from "../lib/api";
+import { getCustomRangeUsage, getDailyUsage, getDevices, getWeeklyUsage } from "../lib/api";
 import { DailyUsageSummary, Device, WeeklyUsageSummary } from "../types";
 
 const UsageAnalytics = () => {
@@ -12,6 +13,7 @@ const UsageAnalytics = () => {
   const [daily, setDaily] = useState<DailyUsageSummary | null>(null);
   const [weekly, setWeekly] = useState<WeeklyUsageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -32,7 +34,9 @@ const UsageAnalytics = () => {
       try {
         const [d, w] = await Promise.all([
           getDailyUsage(token, selectedDevice),
-          getWeeklyUsage(token, selectedDevice),
+          dateRange
+            ? getCustomRangeUsage(token, selectedDevice, dateRange.start, dateRange.end)
+            : getWeeklyUsage(token, selectedDevice),
         ]);
         setDaily(d);
         setWeekly(w);
@@ -41,7 +45,7 @@ const UsageAnalytics = () => {
       }
     };
     load();
-  }, [token, selectedDevice]);
+  }, [token, selectedDevice, dateRange]);
 
   return (
     <div className="space-y-6">
@@ -90,7 +94,9 @@ const UsageAnalytics = () => {
 
       <div className="rounded-lg border bg-white p-4 shadow-sm">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Weekly trend</h2>
+          <h2 className="text-lg font-semibold text-slate-900">
+            {dateRange ? "Custom Range Trend" : "Weekly Trend"}
+          </h2>
           {weekly && (
             <span className="text-xs text-slate-500">
               {new Date(weekly.start).toLocaleDateString()} -{" "}

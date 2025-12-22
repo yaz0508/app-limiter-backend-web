@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma/client";
 import {
   ensureDeviceAccess,
+  getCustomRangeSummary,
   getDailySummary,
   getWeeklySummary,
   ingestUsageLog,
@@ -39,6 +40,21 @@ export const weeklySummary = async (req: Request, res: Response) => {
   ensureDeviceAccess(device.userId, req.user!);
 
   const summary = await getWeeklySummary(deviceId, start);
+  res.json(summary);
+};
+
+export const customRangeSummary = async (req: Request, res: Response) => {
+  const { deviceId } = req.params;
+  const { start, end } = req.query as { start?: string; end?: string };
+  const device = await prisma.device.findUnique({ where: { id: deviceId } });
+  if (!device) return res.status(404).json({ message: "Device not found" });
+  ensureDeviceAccess(device.userId, req.user!);
+
+  if (!start || !end) {
+    return res.status(400).json({ message: "Both start and end dates are required" });
+  }
+
+  const summary = await getCustomRangeSummary(deviceId, start, end);
   res.json(summary);
 };
 

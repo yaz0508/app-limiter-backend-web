@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import UsageChart from "../components/UsageChart";
+import DateRangePicker from "../components/DateRangePicker";
 import { useAuth } from "../context/AuthContext";
-import { getDevices, getUsers, getWeeklyUsage } from "../lib/api";
+import { getCustomRangeUsage, getDevices, getUsers, getWeeklyUsage } from "../lib/api";
 import { Device, User, WeeklyUsageSummary } from "../types";
 
 const UserDetail = () => {
@@ -14,6 +15,7 @@ const UserDetail = () => {
   const [weekly, setWeekly] = useState<WeeklyUsageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -40,14 +42,16 @@ const UserDetail = () => {
       if (!token || !selectedDeviceId) return;
       setError(null);
       try {
-        const summary = await getWeeklyUsage(token, selectedDeviceId);
+        const summary = dateRange
+          ? await getCustomRangeUsage(token, selectedDeviceId, dateRange.start, dateRange.end)
+          : await getWeeklyUsage(token, selectedDeviceId);
         setWeekly(summary);
       } catch (err) {
         setError((err as Error).message);
       }
     };
     loadUsage();
-  }, [token, selectedDeviceId]);
+  }, [token, selectedDeviceId, dateRange]);
 
   const user = useMemo(() => users.find((u) => u.id === id) ?? null, [users, id]);
 
@@ -71,20 +75,39 @@ const UserDetail = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-slate-700">Device</label>
-          <select
-            value={selectedDeviceId}
-            onChange={(e) => setSelectedDeviceId(e.target.value)}
-            className="rounded border px-3 py-2 text-sm"
-            disabled={devices.length === 0}
-          >
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name} ({d.deviceIdentifier})
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700">Device</label>
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              className="rounded border px-3 py-2 text-sm"
+              disabled={devices.length === 0}
+            >
+              {devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.deviceIdentifier})
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedDeviceId && (
+            <>
+              <DateRangePicker
+                onRangeChange={(start, end) => setDateRange({ start, end })}
+                defaultStart={dateRange?.start}
+                defaultEnd={dateRange?.end}
+              />
+              {dateRange && (
+                <button
+                  onClick={() => setDateRange(null)}
+                  className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  Reset
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -108,7 +131,9 @@ const UserDetail = () => {
       {devices.length > 0 && (
         <div className="rounded-lg border bg-white p-4 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Weekly Usage</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              {dateRange ? "Custom Range Usage" : "Weekly Usage"}
+            </h2>
             {weekly && (
               <span className="text-xs text-slate-500">
                 {new Date(weekly.start).toLocaleDateString()} -{" "}

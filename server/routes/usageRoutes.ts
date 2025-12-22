@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { dailySummary, ingest, weeklySummary } from "../controllers/usageController";
+import { customRangeSummary, dailySummary, ingest, weeklySummary } from "../controllers/usageController";
 import { authenticate, authorizeRoles } from "../middleware/authMiddleware";
 import { validateRequest } from "../middleware/validateRequest";
 import { Role } from "@prisma/client";
@@ -59,6 +59,18 @@ router.get(
     })
   ),
   weeklySummary
+);
+
+router.get(
+  "/summary/range/:deviceId",
+  validateRequest(
+    z.object({
+      params: z.object({ deviceId: z.string() }),
+      query: z.object({ start: z.string(), end: z.string() }),
+      body: z.object({}).optional(),
+    })
+  ),
+  customRangeSummary
 );
 
 export const usageRouter = router;

@@ -118,6 +118,35 @@ export const getWeeklySummary = async (
   };
 };
 
+export const getCustomRangeSummary = async (
+  deviceId: string,
+  startDateISO: string,
+  endDateISO: string
+) => {
+  const start = new Date(startDateISO);
+  const normalizedStart = new Date(
+    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
+  );
+  const end = new Date(endDateISO);
+  const normalizedEnd = new Date(
+    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
+  );
+  normalizedEnd.setUTCDate(normalizedEnd.getUTCDate() + 1);
+  normalizedEnd.setUTCMilliseconds(normalizedEnd.getUTCMilliseconds() - 1);
+
+  const aggregates = await aggregateUsage(deviceId, {
+    start: normalizedStart,
+    end: normalizedEnd,
+  });
+  const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);
+  return {
+    start: normalizedStart.toISOString(),
+    end: normalizedEnd.toISOString(),
+    totalSeconds,
+    byApp: aggregates,
+  };
+};
+
 export const ensureDeviceAccess = (
   deviceUserId: string,
   requester: Express.UserPayload

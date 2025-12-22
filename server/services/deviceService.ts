@@ -21,13 +21,24 @@ export const createDevice = async (
   });
 
   if (existing) {
-    if (requester.role !== Role.ADMIN && existing.userId !== requester.id) {
+    // If device already belongs to the same user, just update and return (idempotent).
+    if (existing.userId === ownerId) {
+      return prisma.device.update({
+        where: { id: existing.id },
+        data: {
+          name: data.name ?? existing.name,
+          os: data.os ?? existing.os,
+        },
+      });
+    }
+
+    // Device belongs to a different user.
+    if (requester.role !== Role.ADMIN) {
       throw new Error("DeviceIdentifierInUse");
     }
 
     // Admin may optionally reassign ownership by specifying userId.
-    const newOwnerId =
-      requester.role === Role.ADMIN && data.userId ? data.userId : existing.userId;
+    const newOwnerId = data.userId ? data.userId : existing.userId;
 
     return prisma.device.update({
       where: { id: existing.id },
@@ -119,13 +130,28 @@ export const getDeviceForRequester = async (
 
 export const updateDevice = async (
   id: string,
-  data: { name?: string; os?: string },
+  data: { name?: string; os?: string; userId?: string },
   requester: Express.UserPayload
 ) => {
   const device = await prisma.device.findUnique({ where: { id } });
   if (!device) throw new Error("NotFound");
+
+  // Non-admins can only update their own devices and cannot change userId
   if (requester.role !== Role.ADMIN && device.userId !== requester.id) {
     throw new Error("Forbidden");
+  }
+
+  // Only admins can reassign devices to different users
+  if (data.userId && requester.role !== Role.ADMIN) {
+    throw new Error("Forbidden");
+  }
+
+  // Verify target user exists if reassigning
+  if (data.userId) {
+    const targetUser = await prisma.user.findUnique({ where: { id: data.userId } });
+    if (!targetUser) {
+      throw new Error("UserNotFound");
+    }
   }
 
   return prisma.device.update({
@@ -133,6 +159,7 @@ export const updateDevice = async (
     data: {
       name: data.name ?? device.name,
       os: data.os ?? device.os,
+      userId: data.userId ?? device.userId,
     },
   });
 };

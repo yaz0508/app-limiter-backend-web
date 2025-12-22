@@ -37,7 +37,9 @@ export const create = async (req: Request, res: Response) => {
     res.status(200).json({ device });
   } catch (err) {
     if ((err as Error).message === "DeviceIdentifierInUse") {
-      return res.status(409).json({ message: "Device identifier is already linked to another account" });
+      return res.status(409).json({
+        message: "Device identifier is already linked to another account. If this is your device, please contact support or use a different account."
+      });
     }
     throw err;
   }
@@ -50,6 +52,7 @@ export const update = async (req: Request, res: Response) => {
   } catch (err) {
     const msg = (err as Error).message;
     if (msg === "NotFound") return res.status(404).json({ message: "Device not found" });
+    if (msg === "UserNotFound") return res.status(404).json({ message: "Target user not found" });
     if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
     throw err;
   }

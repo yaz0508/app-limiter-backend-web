@@ -1,23 +1,34 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Table from "../components/Table";
+import { TableSkeleton } from "../components/LoadingSkeleton";
 import { useAuth } from "../context/AuthContext";
-import { createDevice, getDevices } from "../lib/api";
-import { Device } from "../types";
+import { useToast } from "../context/ToastContext";
+import { createDevice, deleteDevice, getDevices, getUsers, updateDevice } from "../lib/api";
+import { Device, User } from "../types";
+import ReassignDeviceModal from "../components/ReassignDeviceModal";
+import { exportDevicesToCSV } from "../utils/export";
 
 const Devices = () => {
   const { token } = useAuth();
+  const { showToast } = useToast();
   const [devices, setDevices] = useState<Device[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [form, setForm] = useState({ name: "", os: "", deviceIdentifier: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [osFilter, setOsFilter] = useState<string>("all");
+  const [reassigningDevice, setReassigningDevice] = useState<Device | null>(null);
+  const [deletingDevice, setDeletingDevice] = useState<Device | null>(null);
 
   const loadDevices = async () => {
     if (!token) return;
     setLoading(true);
     try {
-      const resp = await getDevices(token);
-      setDevices(resp.devices);
+      const [d, u] = await Promise.all([getDevices(token), getUsers(token)]);
+      setDevices(d.devices);
+      setUsers(u.users);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -36,16 +47,105 @@ const Devices = () => {
     try {
       await createDevice(token, form);
       setForm({ name: "", os: "", deviceIdentifier: "" });
+      showToast("Device created successfully", "success");
       await loadDevices();
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      showToast(msg, "error");
     }
   };
+
+  const handleReassign = async (userId: string) => {
+    if (!token || !reassigningDevice) return;
+    await updateDevice(token, reassigningDevice.id, { userId });
+    showToast("Device reassigned successfully", "success");
+    await loadDevices();
+  };
+
+  const handleDelete = async () => {
+    if (!token || !deletingDevice) return;
+    try {
+      await deleteDevice(token, deletingDevice.id);
+      showToast("Device deleted successfully", "success");
+      setDeletingDevice(null);
+      await loadDevices();
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    }
+  };
+
+  const filteredDevices = useMemo(() => {
+    let filtered = devices;
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (d) =>
+          d.name.toLowerCase().includes(query) ||
+          d.deviceIdentifier.toLowerCase().includes(query) ||
+          d.user?.name.toLowerCase().includes(query) ||
+          d.user?.email.toLowerCase().includes(query)
+      );
+    }
+
+    // OS filter
+    if (osFilter !== "all") {
+      filtered = filtered.filter((d) => (d.os || "").toLowerCase() === osFilter.toLowerCase());
+    }
+
+    return filtered;
+  }, [devices, searchQuery, osFilter]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">Devices</h1>
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-slate-500">
+            {loading ? "Loading..." : `${filteredDevices.length} of ${devices.length} devices`}
+          </div>
+          <button
+            onClick={() => exportDevicesToCSV(filteredDevices)}
+            className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Search and Filter */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex-1 min-w-[200px]">
+          <input
+            type="text"
+            placeholder="Search by name, identifier, or user..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          />
+        </div>
+        <select
+          value={osFilter}
+          onChange={(e) => setOsFilter(e.target.value)}
+          className="rounded border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="all">All OS</option>
+          <option value="Android">Android</option>
+          <option value="iOS">iOS</option>
+        </select>
+        {(searchQuery || osFilter !== "all") && (
+          <button
+            onClick={() => {
+              setSearchQuery("");
+              setOsFilter("all");
+            }}
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Info banner about automatic registration */}
@@ -76,9 +176,12 @@ const Devices = () => {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <Table
-            headers={["Name", "User", "Identifier", "OS"]}
-            rows={devices.map((d) => [
+          {loading ? (
+            <TableSkeleton rows={5} cols={5} />
+          ) : (
+            <Table
+              headers={["Name", "User", "Identifier", "OS", ""]}
+              rows={filteredDevices.map((d) => [
               d.name,
               d.user ? (
                 <Link
@@ -97,9 +200,32 @@ const Devices = () => {
                 {d.deviceIdentifier}
               </span>,
               d.os ?? "—",
+              <div key="actions" className="flex items-center gap-2">
+                <button
+                  onClick={() => setReassigningDevice(d)}
+                  className="text-xs text-primary hover:underline"
+                  title="Reassign device"
+                >
+                  Reassign
+                </button>
+                <button
+                  onClick={() => setDeletingDevice(d)}
+                  className="text-xs text-red-600 hover:underline"
+                  title="Delete device"
+                >
+                  Delete
+                </button>
+              </div>,
             ])}
-            emptyMessage={loading ? "Loading..." : "No devices registered yet"}
-          />
+            emptyMessage={
+              loading
+                ? "Loading..."
+                : searchQuery || osFilter !== "all"
+                ? "No devices match your filters"
+                : "No devices registered yet"
+              }
+            />
+          )}
         </div>
         <div className="rounded-lg border bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Manually Add Device</h2>
@@ -142,6 +268,40 @@ const Devices = () => {
           </form>
         </div>
       </div>
+
+      {reassigningDevice && (
+        <ReassignDeviceModal
+          device={reassigningDevice}
+          users={users}
+          onClose={() => setReassigningDevice(null)}
+          onSave={handleReassign}
+        />
+      )}
+
+      {deletingDevice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-xl font-semibold text-slate-900">Delete Device</h2>
+            <p className="mb-4 text-sm text-slate-600">
+              Are you sure you want to delete device <strong>{deletingDevice.name}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeletingDevice(null)}
+                className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Delete Device
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

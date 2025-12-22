@@ -122,4 +122,29 @@ export const getWeeklyUsage = (token: string, deviceId: string, start?: string) 
   return apiRequest<WeeklyUsageSummary>(`/usage/summary/weekly/${deviceId}${query}`, { token });
 };
 
+export const getCustomRangeUsage = (token: string, deviceId: string, start: string, end: string) => {
+  const query = `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+  return apiRequest<WeeklyUsageSummary>(`/usage/summary/range/${deviceId}${query}`, { token });
+};
+
+export const updateUser = (
+  token: string,
+  userId: string,
+  payload: { name?: string; email?: string; role?: string; password?: string }
+) => apiRequest<{ user: User }>(`/users/${userId}`, { token, method: "PUT", body: payload });
+
+export const createUser = (
+  token: string,
+  payload: { name: string; email: string; password: string; role?: string }
+) => apiRequest<{ user: User }>("/users", { token, method: "POST", body: payload });
+
+export const updateDevice = (
+  token: string,
+  deviceId: string,
+  payload: { name?: string; os?: string; userId?: string }
+) => apiRequest<{ device: Device }>(`/devices/${deviceId}`, { token, method: "PUT", body: payload });
+
+export const deleteDevice = (token: string, deviceId: string) =>
+  apiRequest<void>(`/devices/${deviceId}`, { token, method: "DELETE" });
+
 

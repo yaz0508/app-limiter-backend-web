@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import StatCard from "../components/StatCard";
 import UsageChart from "../components/UsageChart";
+import DateRangePicker from "../components/DateRangePicker";
 import { useAuth } from "../context/AuthContext";
-import { getDevices, getWeeklyUsage } from "../lib/api";
+import { getCustomRangeUsage, getDevices, getWeeklyUsage } from "../lib/api";
 import { Device, WeeklyUsageSummary } from "../types";
+import { exportUsageToCSV } from "../utils/export";
+import { useToast } from "../context/ToastContext";
 
 const Dashboard = () => {
   const { token } = useAuth();
+  const { showToast } = useToast();
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [summary, setSummary] = useState<WeeklyUsageSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
 
   useEffect(() => {
     const fetchDevices = async () => {
@@ -31,7 +36,12 @@ const Dashboard = () => {
       setLoading(true);
       setError(null);
       try {
-        const weekly = await getWeeklyUsage(token, selectedDevice);
+        let weekly: WeeklyUsageSummary;
+        if (dateRange) {
+          weekly = await getCustomRangeUsage(token, selectedDevice, dateRange.start, dateRange.end);
+        } else {
+          weekly = await getWeeklyUsage(token, selectedDevice);
+        }
         setSummary(weekly);
       } catch (err) {
         setError((err as Error).message);
@@ -40,7 +50,7 @@ const Dashboard = () => {
       }
     };
     loadUsage();
-  }, [token, selectedDevice]);
+  }, [token, selectedDevice, dateRange]);
 
   const totalMinutes = useMemo(() => {
     if (!summary) return 0;
@@ -49,19 +59,34 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-900">Overview</h1>
-        <select
-          value={selectedDevice}
-          onChange={(e) => setSelectedDevice(e.target.value)}
-          className="rounded border px-3 py-2 text-sm"
-        >
-          {devices.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name} ({d.deviceIdentifier})
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedDevice}
+            onChange={(e) => setSelectedDevice(e.target.value)}
+            className="rounded border px-3 py-2 text-sm"
+          >
+            {devices.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name} ({d.deviceIdentifier})
+              </option>
+            ))}
+          </select>
+          <DateRangePicker
+            onRangeChange={(start, end) => setDateRange({ start, end })}
+            defaultStart={dateRange?.start}
+            defaultEnd={dateRange?.end}
+          />
+          {dateRange && (
+            <button
+              onClick={() => setDateRange(null)}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Reset
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
@@ -81,13 +106,28 @@ const Dashboard = () => {
 
       <div className="rounded-lg border bg-white p-4 shadow-sm">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Weekly Usage</h2>
-          {summary && (
-            <span className="text-xs text-slate-500">
-              {new Date(summary.start).toLocaleDateString()} -{" "}
-              {new Date(summary.end).toLocaleDateString()}
-            </span>
-          )}
+          <h2 className="text-lg font-semibold text-slate-900">
+            {dateRange ? "Custom Range Usage" : "Weekly Usage"}
+          </h2>
+          <div className="flex items-center gap-3">
+            {summary && (
+              <span className="text-xs text-slate-500">
+                {new Date(summary.start).toLocaleDateString()} -{" "}
+                {new Date(summary.end).toLocaleDateString()}
+              </span>
+            )}
+            {summary && summary.byApp.length > 0 && (
+              <button
+                onClick={() => {
+                  exportUsageToCSV(summary);
+                  showToast("Usage data exported to CSV", "success");
+                }}
+                className="rounded border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Export CSV
+              </button>
+            )}
+          </div>
         </div>
         {loading && <div className="py-10 text-center text-slate-500">Loading usage...</div>}
         {!loading && summary && summary.byApp.length > 0 && (

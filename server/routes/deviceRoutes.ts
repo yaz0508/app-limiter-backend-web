@@ -48,6 +48,7 @@ router.put(
       body: z.object({
         name: z.string().optional(),
         os: z.string().optional(),
+        userId: z.string().optional(), // Admin-only: reassign device to different user
       }),
       query: z.object({}).optional(),
     })
