@@ -13,6 +13,10 @@ const authLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later." },
+  // Disable trust proxy validation: we trust only the first proxy (Render's load balancer).
+  validate: {
+    trustProxy: false,
+  },
 });
 
 const credentialsSchema = z.object({

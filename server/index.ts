@@ -17,8 +17,9 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 4000;
 
-// Trust proxy (required for rate limiting behind Render/load balancers).
-app.set("trust proxy", true);
+// Trust proxy: trust only the first proxy (Render's load balancer).
+// This is required for accurate IP-based rate limiting behind proxies.
+app.set("trust proxy", 1);
 
 const NODE_ENV = process.env.NODE_ENV ?? "development";
 
