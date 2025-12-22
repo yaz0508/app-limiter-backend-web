@@ -58,14 +58,14 @@ const Dashboard = () => {
   }, [summary]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">Overview</h1>
-        <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Overview</h1>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <select
             value={selectedDevice}
             onChange={(e) => setSelectedDevice(e.target.value)}
-            className="rounded border px-3 py-2 text-sm"
+            className="w-full rounded border px-3 py-2 text-sm sm:w-auto"
           >
             {devices.map((d) => (
               <option key={d.id} value={d.id}>
@@ -73,25 +73,27 @@ const Dashboard = () => {
               </option>
             ))}
           </select>
-          <DateRangePicker
-            onRangeChange={(start, end) => setDateRange({ start, end })}
-            defaultStart={dateRange?.start}
-            defaultEnd={dateRange?.end}
-          />
-          {dateRange && (
-            <button
-              onClick={() => setDateRange(null)}
-              className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Reset
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <DateRangePicker
+              onRangeChange={(start, end) => setDateRange({ start, end })}
+              defaultStart={dateRange?.start}
+              defaultEnd={dateRange?.end}
+            />
+            {dateRange && (
+              <button
+                onClick={() => setDateRange(null)}
+                className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {error && <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         <StatCard label="Weekly total" value={`${totalMinutes} mins`} />
         <StatCard
           label="Tracked apps"
@@ -104,12 +106,12 @@ const Dashboard = () => {
         />
       </div>
 
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
+      <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
             {dateRange ? "Custom Range Usage" : "Weekly Usage"}
           </h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             {summary && (
               <span className="text-xs text-slate-500">
                 {new Date(summary.start).toLocaleDateString()} -{" "}

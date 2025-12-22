@@ -23,9 +23,9 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-white to-slate-100">
-      <div className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-xl">
-        <h1 className="text-2xl font-semibold text-slate-900">Welcome back</h1>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-white to-slate-100 px-4">
+      <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-xl sm:p-8">
+        <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Welcome back</h1>
         <p className="text-sm text-slate-500">Digital Wellbeing dashboard</p>
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <div>

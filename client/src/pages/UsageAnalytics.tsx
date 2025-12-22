@@ -48,13 +48,13 @@ const UsageAnalytics = () => {
   }, [token, selectedDevice, dateRange]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">Usage Analytics</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Usage Analytics</h1>
         <select
           value={selectedDevice}
           onChange={(e) => setSelectedDevice(e.target.value)}
-          className="rounded border px-3 py-2 text-sm"
+          className="w-full rounded border px-3 py-2 text-sm sm:w-auto"
         >
           {devices.map((d) => (
             <option key={d.id} value={d.id}>
@@ -65,9 +65,9 @@ const UsageAnalytics = () => {
       </div>
       {error && <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Today</h2>
+      <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Today</h2>
           {daily && (
             <span className="text-xs text-slate-500">
               {new Date(daily.date).toLocaleDateString()}
@@ -92,9 +92,9 @@ const UsageAnalytics = () => {
         )}
       </div>
 
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
+      <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
             {dateRange ? "Custom Range Trend" : "Weekly Trend"}
           </h2>
           {weekly && (

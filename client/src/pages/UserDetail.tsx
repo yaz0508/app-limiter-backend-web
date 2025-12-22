@@ -56,32 +56,32 @@ const UserDetail = () => {
   const user = useMemo(() => users.find((u) => u.id === id) ?? null, [users, id]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <div className="text-sm text-slate-500">
+          <div className="text-xs text-slate-500 sm:text-sm">
             <Link to="/users" className="hover:underline">
               Users
             </Link>{" "}
             / {user?.name ?? "User"}
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">
+          <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">
             {user?.name ?? "User details"}
           </h1>
           {user && (
-            <div className="text-sm text-slate-600">
+            <div className="text-xs text-slate-600 sm:text-sm">
               {user.email} • <span className="font-semibold">{user.role}</span>
             </div>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-slate-700">Device</label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="text-xs font-medium text-slate-700 sm:text-sm">Device</label>
             <select
               value={selectedDeviceId}
               onChange={(e) => setSelectedDeviceId(e.target.value)}
-              className="rounded border px-3 py-2 text-sm"
+              className="w-full rounded border px-3 py-2 text-sm sm:w-auto"
               disabled={devices.length === 0}
             >
               {devices.map((d) => (
@@ -92,7 +92,7 @@ const UserDetail = () => {
             </select>
           </div>
           {selectedDeviceId && (
-            <>
+            <div className="flex items-center gap-2">
               <DateRangePicker
                 onRangeChange={(start, end) => setDateRange({ start, end })}
                 defaultStart={dateRange?.start}
@@ -106,7 +106,7 @@ const UserDetail = () => {
                   Reset
                 </button>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -129,9 +129,9 @@ const UserDetail = () => {
       )}
 
       {devices.length > 0 && (
-        <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">
+        <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
+          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
               {dateRange ? "Custom Range Usage" : "Weekly Usage"}
             </h2>
             {weekly && (

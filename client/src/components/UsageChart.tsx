@@ -17,12 +17,12 @@ const UsageChart = ({ data }: Props) => {
     minutes: Number((item.totalMinutes ?? 0).toFixed(1)),
   }));
   return (
-    <div className="h-72 w-full">
+    <div className="h-64 w-full sm:h-72">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={formatted} margin={{ left: 12, right: 12 }}>
+        <BarChart data={formatted} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" hide />
-          <YAxis />
+          <YAxis width={40} />
           <Tooltip />
           <Bar dataKey="minutes" fill="#2563eb" radius={[4, 4, 0, 0]} />
         </BarChart>

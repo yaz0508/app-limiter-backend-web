@@ -1,4 +1,4 @@
-import { DailyUsageSummary, Device, Limit, User, WeeklyUsageSummary } from "../types";
+import { App, DailyUsageSummary, Device, Limit, User, WeeklyUsageSummary } from "../types";
 
 // Ensure API_URL ends with /api, but handle cases where it might already include it
 const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -146,5 +146,8 @@ export const updateDevice = (
 
 export const deleteDevice = (token: string, deviceId: string) =>
   apiRequest<void>(`/devices/${deviceId}`, { token, method: "DELETE" });
+
+export const getDeviceApps = (token: string, deviceId: string) =>
+  apiRequest<{ apps: App[] }>(`/apps/device/${deviceId}`, { token });
 
 

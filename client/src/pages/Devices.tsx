@@ -99,16 +99,16 @@ const Devices = () => {
   }, [devices, searchQuery, osFilter]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">Devices</h1>
-        <div className="flex items-center gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Devices</h1>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <div className="text-sm text-slate-500">
             {loading ? "Loading..." : `${filteredDevices.length} of ${devices.length} devices`}
           </div>
           <button
             onClick={() => exportDevicesToCSV(filteredDevices)}
-            className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:px-4"
           >
             Export CSV
           </button>
@@ -175,7 +175,7 @@ const Devices = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="order-2 lg:order-1 lg:col-span-2">
           {loading ? (
             <TableSkeleton rows={5} cols={5} />
           ) : (
@@ -227,8 +227,8 @@ const Devices = () => {
             />
           )}
         </div>
-        <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Manually Add Device</h2>
+        <div className="order-1 rounded-lg border bg-white p-4 shadow-sm lg:order-2">
+          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Manually Add Device</h2>
           <p className="mt-1 text-sm text-slate-500">
             Admin only: Manually register a device for testing or edge cases. Devices are normally
             registered automatically when users log in on the Android app.
@@ -279,8 +279,8 @@ const Devices = () => {
       )}
 
       {deletingDevice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-xl sm:p-6">
             <h2 className="mb-4 text-xl font-semibold text-slate-900">Delete Device</h2>
             <p className="mb-4 text-sm text-slate-600">
               Are you sure you want to delete device <strong>{deletingDevice.name}</strong>? This action cannot be undone.
