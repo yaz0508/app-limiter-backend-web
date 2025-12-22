@@ -26,7 +26,7 @@ mongodb+srv://USERNAME:PASSWORD@cluster0.6kdabsk.mongodb.net/DATABASE_NAME?retry
 
 **Example:**
 ```
-mongodb+srv://samuelzurbano0508_db_user:3eJ4Xo3BRRROSQhU@cluster0.6kdabsk.mongodb.net/digital-wellbeing?retryWrites=true&w=majority
+mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@cluster0.6kdabsk.mongodb.net/digital-wellbeing?retryWrites=true&w=majority
 ```
 
 ## Step 2: Configure MongoDB Atlas IP Whitelist

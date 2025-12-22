@@ -15,7 +15,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem("auth_token")
+    () => sessionStorage.getItem("auth_token")
   );
   const [loading, setLoading] = useState<boolean>(!!token);
 
@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } catch (err) {
         console.error(err);
         setToken(null);
-        localStorage.removeItem("auth_token");
+        sessionStorage.removeItem("auth_token");
       } finally {
         setLoading(false);
       }
@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const resp = await loginRequest(email, password);
       setToken(resp.token);
       setUser(resp.user);
-      localStorage.setItem("auth_token", resp.token);
+      sessionStorage.setItem("auth_token", resp.token);
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = () => {
     setToken(null);
     setUser(null);
-    localStorage.removeItem("auth_token");
+    sessionStorage.removeItem("auth_token");
   };
 
   const value = useMemo(

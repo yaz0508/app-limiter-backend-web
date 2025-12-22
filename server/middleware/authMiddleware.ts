@@ -2,7 +2,13 @@ import { Role } from "@prisma/client";
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "change-me";
+const JWT_SECRET = (() => {
+  const value = process.env.JWT_SECRET;
+  if (!value || value.trim() === "") {
+    throw new Error("JWT_SECRET is not set");
+  }
+  return value;
+})();
 
 export const authenticate = (
   req: Request,

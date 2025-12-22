@@ -25,18 +25,18 @@ This guide will help you deploy the frontend to Vercel and the backend to Render
 In the Render dashboard, go to your service → **Environment** tab and add:
 
 ```
-DATABASE_URL=mongodb+srv://samuelzurbano0508_db_user:3eJ4Xo3BRRROSQhU@cluster0.6kdabsk.mongodb.net/digital-wellbeing?retryWrites=true&w=majority
+DATABASE_URL=mongodb+srv://<username>:<password>@cluster0.6kdabsk.mongodb.net/digital-wellbeing?retryWrites=true&w=majority
 JWT_SECRET=<generate-a-secure-random-string-here>
 JWT_EXPIRES_IN=7d
 BCRYPT_SALT_ROUNDS=10
-CORS_ORIGIN=*
+CORS_ORIGIN=https://your-vercel-app.vercel.app
 INGESTION_API_KEY=<optional-secure-key-for-mobile-app>
 ```
 
 **Important Notes:**
 - **JWT_SECRET**: Generate a secure random string (you can use: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
-- **CORS_ORIGIN**: Set to `*` initially, then update to your Vercel URL after frontend deployment
-- **DATABASE_URL**: Use your MongoDB connection string
+- **CORS_ORIGIN**: Set to your Vercel URL (or comma-separated allowlist). Avoid `*` for production.
+- **DATABASE_URL**: Use your MongoDB connection string (do not commit real credentials)
 
 ### 1.3 Deploy
 

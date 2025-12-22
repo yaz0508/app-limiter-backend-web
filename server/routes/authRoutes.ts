@@ -1,10 +1,19 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { login, me, register } from "../controllers/authController";
 import { authenticate } from "../middleware/authMiddleware";
 import { validateRequest } from "../middleware/validateRequest";
 
 const router = Router();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20, // per IP
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many requests, please try again later." },
+});
 
 const credentialsSchema = z.object({
   body: z.object({
@@ -25,8 +34,8 @@ const registerSchema = z.object({
   params: z.object({}).optional(),
 });
 
-router.post("/login", validateRequest(credentialsSchema), login);
-router.post("/register", validateRequest(registerSchema), register);
+router.post("/login", authLimiter, validateRequest(credentialsSchema), login);
+router.post("/register", authLimiter, validateRequest(registerSchema), register);
 router.get("/me", authenticate, me);
 
 export const authRouter = router;

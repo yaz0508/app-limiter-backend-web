@@ -3,7 +3,13 @@ import bcrypt from "bcryptjs";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { prisma } from "../prisma/client";
 
-const JWT_SECRET = process.env.JWT_SECRET || "change-me";
+const JWT_SECRET = (() => {
+  const value = process.env.JWT_SECRET;
+  if (!value || value.trim() === "") {
+    throw new Error("JWT_SECRET is not set");
+  }
+  return value;
+})();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS ?? 10);
 
