@@ -5,10 +5,25 @@ You're seeing: "CORS error: The backend at https://app-limiter-backend-web-2.onr
 
 This happens because the backend's `CORS_ORIGIN` environment variable doesn't include your Vercel frontend URL.
 
+**The error message will now show the exact origin being blocked!** Look for a message like:
+```
+CORS error: ... blocking requests from origin: https://your-actual-url.vercel.app
+```
+
 ## Solution
 
-### Step 1: Find Your Vercel Frontend URL
+### Step 1: Find Your Actual Frontend Origin
 
+**Option A: Check the error message**
+- The error message now shows the exact origin: `blocking requests from origin: https://...`
+- Copy that exact URL
+
+**Option B: Check your browser**
+- Open browser DevTools (F12)
+- Go to Console tab
+- The error will show the exact origin
+
+**Option C: Check Vercel dashboard**
 1. Go to https://vercel.com/dashboard
 2. Click on your project
 3. Copy your deployment URL (e.g., `https://app-limiter.vercel.app` or `https://your-project-name.vercel.app`)
@@ -61,6 +76,7 @@ Render should automatically redeploy when you change environment variables. If i
    - Go to Render dashboard → Your service → **Logs**
    - Look for `[CORS] Rejected origin:` messages
    - The log will show what origin was rejected and what origins are allowed
+   - Example: `[CORS] Rejected origin: https://admin-dashboard.vercel.app. Allowed origins: https://old-url.vercel.app`
 
 3. **Multiple deployments:**
    - If you have preview deployments on Vercel, you may need to add multiple origins:

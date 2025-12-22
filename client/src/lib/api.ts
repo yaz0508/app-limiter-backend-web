@@ -55,8 +55,14 @@ const apiRequest = async <T>(path: string, options: Options = {}): Promise<T> =>
         (error instanceof TypeError && errorMsg.includes("Failed to fetch"));
 
       if (isCorsError) {
+        const currentOrigin = window.location.origin;
         throw new Error(
-          `CORS error: The backend at ${API_URL} is blocking requests from this origin. Please check CORS_ORIGIN configuration on the backend.`
+          `CORS error: The backend at ${API_URL} is blocking requests from origin: ${currentOrigin}\n\n` +
+          `To fix this:\n` +
+          `1. Go to Render dashboard → Your service → Environment\n` +
+          `2. Update CORS_ORIGIN to include: ${currentOrigin}\n` +
+          `3. Or set it to: ${currentOrigin} (if single origin)\n` +
+          `4. Save and wait for redeploy`
         );
       }
 
