@@ -35,11 +35,23 @@ export const validateUserCredentials = async (
   email: string,
   password: string
 ) => {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return null;
+  // Normalize email to lowercase (consistent with user creation).
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  if (!user) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[AUTH] User not found for email: ${normalizedEmail}`);
+    }
+    return null;
+  }
 
   const match = await verifyPassword(password, user.passwordHash);
-  if (!match) return null;
+  if (!match) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[AUTH] Password mismatch for user: ${user.email}`);
+    }
+    return null;
+  }
 
   return user;
 };

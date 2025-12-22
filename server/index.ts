@@ -113,8 +113,43 @@ app.use("/api/apps", appRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.listen(port, () => {
+// Run admin seed on startup (idempotent, safe to run every time).
+const runStartupSeed = async () => {
+  try {
+    const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    const password = process.env.ADMIN_PASSWORD;
+    const name = process.env.ADMIN_NAME?.trim() || "Admin";
+
+    if (!email || !password) {
+      console.log("[STARTUP] Seed skipped: ADMIN_EMAIL and ADMIN_PASSWORD not set.");
+      return;
+    }
+
+    console.log(`[STARTUP] Creating/updating admin user: ${email}`);
+    const bcrypt = await import("bcryptjs");
+    const { prisma } = await import("./prisma/client");
+
+    const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS ?? 10);
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { name, passwordHash, role: "ADMIN" },
+      create: { email, name, passwordHash, role: "ADMIN" },
+      select: { id: true, email: true, name: true, role: true, createdAt: true },
+    });
+
+    console.log("[STARTUP] Admin user ready:", { id: user.id, email: user.email, role: user.role });
+  } catch (error) {
+    // Don't crash server if seed fails.
+    console.error("[STARTUP] Seed error (non-fatal):", error);
+  }
+};
+
+app.listen(port, async () => {
   console.log(`API listening on port ${port}`);
+  // Run seed in background (non-blocking).
+  runStartupSeed().catch(console.error);
 });
 
 

@@ -26,10 +26,23 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
+
+  // Temporary debug logging (remove after fixing the issue).
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[LOGIN] Attempt for email: ${email?.substring(0, 5)}...`);
+  }
+
   const user = await validateUserCredentials(email, password);
   if (!user) {
+    // Temporary: log if admin user exists at all (for debugging).
+    if (process.env.NODE_ENV !== "production") {
+      const { prisma } = await import("../prisma/client");
+      const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
+      console.log(`[LOGIN] Failed. Total admin users in DB: ${adminCount}`);
+    }
     return res.status(401).json({ message: "Invalid credentials" });
   }
+
   const token = generateToken({
     id: user.id,
     email: user.email,
