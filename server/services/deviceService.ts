@@ -55,10 +55,42 @@ export const listDevicesForRequester = async (
   const where =
     requester.role === Role.ADMIN ? {} : { userId: requester.id };
 
+  // For admins, we need to handle orphaned devices (devices with invalid userId).
+  // Prisma will throw an error if we include a required relation that doesn't exist.
+  // Solution: Query devices without user, then fetch users separately and map them.
+  if (requester.role === Role.ADMIN) {
+    const devices = await prisma.device.findMany({
+      where,
+      include: {
+        limits: {
+          include: { app: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Get unique userIds and fetch users
+    const userIds = [...new Set(devices.map((d) => d.userId).filter(Boolean))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, email: true, name: true, role: true },
+    });
+
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    // Map devices with users, filter out orphaned devices
+    return devices
+      .map((device) => ({
+        ...device,
+        user: userMap.get(device.userId) || null,
+      }))
+      .filter((device) => device.user !== null);
+  }
+
+  // For non-admins, user relation is not needed
   return prisma.device.findMany({
     where,
     include: {
-      user: requester.role === Role.ADMIN ? { select: { id: true, email: true, name: true, role: true } } : false,
       limits: {
         include: { app: true },
       },
@@ -118,10 +150,22 @@ export const deleteDevice = async (
 };
 
 export const findDeviceByIdentifier = async (deviceIdentifier: string) => {
-  return prisma.device.findUnique({
+  const device = await prisma.device.findUnique({
     where: { deviceIdentifier },
-    include: { user: true },
   });
+
+  if (!device) return null;
+
+  // Fetch user separately to handle orphaned devices
+  const user = await prisma.user.findUnique({
+    where: { id: device.userId },
+    select: { id: true, email: true, name: true, role: true },
+  });
+
+  return {
+    ...device,
+    user,
+  };
 };
 
 
