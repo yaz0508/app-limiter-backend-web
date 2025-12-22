@@ -67,7 +67,9 @@ corsConfig.origin =
       // Non-browser tools may send no Origin; allow those.
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error("CORS origin not allowed"));
+      // Log rejected origin for debugging
+      console.warn(`[CORS] Rejected origin: ${origin}. Allowed origins: ${allowedOrigins.join(", ")}`);
+      return callback(new Error(`CORS origin not allowed: ${origin}`));
     };
 
 // Log CORS configuration
