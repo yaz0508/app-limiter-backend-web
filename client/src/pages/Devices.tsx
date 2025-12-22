@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Table from "../components/Table";
 import { useAuth } from "../context/AuthContext";
 import { createDevice, getDevices } from "../lib/api";
@@ -46,26 +47,67 @@ const Devices = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">Devices</h1>
       </div>
+
+      {/* Info banner about automatic registration */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="flex items-start gap-3">
+          <svg
+            className="h-5 w-5 shrink-0 text-blue-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-blue-900">Automatic Device Registration</h3>
+            <p className="mt-1 text-sm text-blue-800">
+              Devices are automatically registered when users log in or register on the Android app.
+              The manual form below is for admin use only (e.g., testing or edge cases).
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <Table
-            headers={["Name", "Identifier", "OS"]}
+            headers={["Name", "User", "Identifier", "OS"]}
             rows={devices.map((d) => [
               d.name,
+              d.user ? (
+                <Link
+                  key="user"
+                  to={`/users/${d.userId}`}
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  {d.user.name}
+                </Link>
+              ) : (
+                <span key="user" className="text-sm text-slate-500">
+                  Unknown
+                </span>
+              ),
               <span className="font-mono text-xs" key="id">
                 {d.deviceIdentifier}
               </span>,
               d.os ?? "—",
             ])}
-            emptyMessage={loading ? "Loading..." : "No devices yet"}
+            emptyMessage={loading ? "Loading..." : "No devices registered yet"}
           />
         </div>
         <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Add device</h2>
-          <p className="text-sm text-slate-500">
-            Register a device identifier to bind usage logs.
+          <h2 className="text-lg font-semibold text-slate-900">Manually Add Device</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Admin only: Manually register a device for testing or edge cases. Devices are normally
+            registered automatically when users log in on the Android app.
           </p>
-          <form className="mt-3 space-y-3" onSubmit={handleSubmit}>
+          <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
             <div>
               <label className="text-sm font-medium text-slate-700">Name</label>
               <input

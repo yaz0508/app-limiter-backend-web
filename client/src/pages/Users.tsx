@@ -63,13 +63,27 @@ const Users = () => {
           <span key="role" className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
             {u.role}
           </span>,
-          u.deviceCount,
+          <span key="devices" className="text-sm">
+            {u.deviceCount > 0 ? (
+              <span className="font-semibold text-slate-900">{u.deviceCount}</span>
+            ) : (
+              <span className="text-slate-400">0</span>
+            )}
+          </span>,
           <Link key="view" to={`/users/${u.id}`} className="text-sm font-semibold text-primary hover:underline">
             View
           </Link>,
         ])}
         emptyMessage={loading ? "Loading..." : "No users yet"}
       />
+
+      {!loading && rows.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs text-slate-600">
+            <strong>Note:</strong> Device counts reflect devices automatically registered when users log in or register on the Android app.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

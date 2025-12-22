@@ -95,8 +95,13 @@ const UserDetail = () => {
       )}
 
       {!loading && devices.length === 0 && (
-        <div className="rounded-lg border bg-white p-6 text-slate-700 shadow-sm">
-          No devices registered for this user yet.
+        <div className="rounded-lg border bg-white p-6 shadow-sm">
+          <div className="text-center">
+            <p className="text-slate-700">No devices registered for this user yet.</p>
+            <p className="mt-2 text-sm text-slate-500">
+              Devices are automatically registered when the user logs in or registers on the Android app.
+            </p>
+          </div>
         </div>
       )}
 
