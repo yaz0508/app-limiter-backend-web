@@ -27,19 +27,25 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
-  // Temporary debug logging (remove after fixing the issue).
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[LOGIN] Attempt for email: ${email?.substring(0, 5)}...`);
-  }
+  // Log login attempts (sanitized for security)
+  const emailPrefix = email ? email.substring(0, 5) + "..." : "(empty)";
+  console.log(`[LOGIN] Attempt for email: ${emailPrefix}`);
 
   const user = await validateUserCredentials(email, password);
   if (!user) {
-    // Temporary: log if admin user exists at all (for debugging).
-    if (process.env.NODE_ENV !== "production") {
-      const { prisma } = await import("../prisma/client");
-      const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
-      console.log(`[LOGIN] Failed. Total admin users in DB: ${adminCount}`);
+    // Log failed login attempt details
+    const { prisma } = await import("../prisma/client");
+    const normalizedEmail = email?.trim().toLowerCase();
+    const userExists = normalizedEmail
+      ? await prisma.user.findUnique({ where: { email: normalizedEmail } })
+      : null;
+
+    console.log(`[LOGIN] Failed for: ${emailPrefix}`);
+    console.log(`[LOGIN] User exists: ${userExists ? "yes" : "no"}`);
+    if (userExists) {
+      console.log(`[LOGIN] User role: ${userExists.role}`);
     }
+
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
