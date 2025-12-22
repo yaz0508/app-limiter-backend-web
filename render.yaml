@@ -3,7 +3,7 @@ services:
     name: digital-wellbeing-api
     env: node
     rootDirectory: server
-    buildCommand: "npm install && npx prisma generate && npm run build"
+    buildCommand: "npm install && npx prisma generate && npm run build && npm run seed:admin"
     startCommand: "npm start"
     envVars:
       - key: PORT
