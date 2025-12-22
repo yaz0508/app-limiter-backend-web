@@ -75,8 +75,17 @@ export const loginRequest = (email: string, password: string) =>
     body: { email, password },
   });
 
+export const registerRequest = (email: string, name: string, password: string) =>
+  apiRequest<{ token: string; user: User }>("/auth/register", {
+    method: "POST",
+    body: { email, name, password },
+  });
+
 export const getProfile = (token: string) =>
   apiRequest<{ user: User }>("/auth/me", { token });
+
+export const getUsers = (token: string) =>
+  apiRequest<{ users: User[] }>("/users", { token });
 
 export const getDevices = (token: string) =>
   apiRequest<{ devices: Device[] }>("/devices", { token });

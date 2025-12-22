@@ -7,7 +7,7 @@ import { Role } from "@prisma/client";
 
 const router = Router();
 
-router.use(authenticate, authorizeRoles(Role.ADMIN, Role.PARENT));
+router.use(authenticate, authorizeRoles(Role.ADMIN, Role.USER));
 
 router.get("/", list);
 

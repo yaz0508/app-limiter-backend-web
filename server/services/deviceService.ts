@@ -11,9 +11,33 @@ export const createDevice = async (
   requester: Express.UserPayload
 ) => {
   const ownerId =
-    requester.role === Role.ADMIN
-      ? data.userId ?? requester.id
-      : requester.id;
+    requester.role === Role.ADMIN ? data.userId ?? requester.id : requester.id;
+
+  // Idempotent device registration:
+  // - If deviceIdentifier already exists for same owner, update name/os and return it.
+  // - If it exists for a different owner, block non-admins; allow admins to reassign if userId provided.
+  const existing = await prisma.device.findUnique({
+    where: { deviceIdentifier: data.deviceIdentifier },
+  });
+
+  if (existing) {
+    if (requester.role !== Role.ADMIN && existing.userId !== requester.id) {
+      throw new Error("DeviceIdentifierInUse");
+    }
+
+    // Admin may optionally reassign ownership by specifying userId.
+    const newOwnerId =
+      requester.role === Role.ADMIN && data.userId ? data.userId : existing.userId;
+
+    return prisma.device.update({
+      where: { id: existing.id },
+      data: {
+        name: data.name ?? existing.name,
+        os: data.os ?? existing.os,
+        userId: newOwnerId,
+      },
+    });
+  }
 
   return prisma.device.create({
     data: {
@@ -34,6 +58,7 @@ export const listDevicesForRequester = async (
   return prisma.device.findMany({
     where,
     include: {
+      user: requester.role === Role.ADMIN ? { select: { id: true, email: true, name: true, role: true } } : false,
       limits: {
         include: { app: true },
       },

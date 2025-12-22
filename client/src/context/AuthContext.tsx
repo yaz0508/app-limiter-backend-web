@@ -24,6 +24,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!token) return;
       try {
         const me = await getProfile(token);
+        // Admin-only web dashboard: reject non-admin tokens.
+        if (me.user.role !== "ADMIN") {
+          setUser(null);
+          setToken(null);
+          sessionStorage.removeItem("auth_token");
+          return;
+        }
         setUser(me.user);
       } catch (err) {
         console.error(err);
@@ -40,6 +47,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(true);
     try {
       const resp = await loginRequest(email, password);
+      if (resp.user.role !== "ADMIN") {
+        throw new Error("This dashboard is for admins only.");
+      }
       setToken(resp.token);
       setUser(resp.user);
       sessionStorage.setItem("auth_token", resp.token);

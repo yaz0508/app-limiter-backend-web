@@ -27,11 +27,20 @@ export const get = async (req: Request, res: Response) => {
 
 export const create = async (req: Request, res: Response) => {
   const { name, os, deviceIdentifier, userId } = req.body;
-  const device = await createDevice(
-    { name, os, deviceIdentifier, userId },
-    req.user!
-  );
-  res.status(201).json({ device });
+  try {
+    const device = await createDevice(
+      { name, os, deviceIdentifier, userId },
+      req.user!
+    );
+    // 201 if created, 200 if it already existed (idempotent behavior).
+    // We can’t trivially distinguish without extra queries; treat as success.
+    res.status(200).json({ device });
+  } catch (err) {
+    if ((err as Error).message === "DeviceIdentifierInUse") {
+      return res.status(409).json({ message: "Device identifier is already linked to another account" });
+    }
+    throw err;
+  }
 };
 
 export const update = async (req: Request, res: Response) => {

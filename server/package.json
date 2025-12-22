@@ -9,6 +9,7 @@
         "start": "node dist/index.js",
         "prisma:generate": "prisma generate",
         "prisma:push": "prisma db push",
+        "seed:admin": "ts-node prisma/seed.ts",
         "lint": "tsc --noEmit"
     },
     "dependencies": {
@@ -32,6 +33,7 @@
         "@types/morgan": "^1.9.9",
         "@types/node": "^22.7.4",
         "prisma": "^5.19.1",
+        "ts-node": "^10.9.2",
         "ts-node-dev": "^2.0.0",
         "typescript": "^5.6.3"
     },

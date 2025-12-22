@@ -35,7 +35,7 @@ router.post(
   }
 );
 
-router.use(authenticate, authorizeRoles(Role.ADMIN, Role.PARENT));
+router.use(authenticate, authorizeRoles(Role.ADMIN, Role.USER));
 
 router.get(
   "/summary/daily/:deviceId",

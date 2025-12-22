@@ -21,7 +21,7 @@ const ProtectedRoute = ({ allowed }: Props) => {
   }
 
   if (allowed && !allowed.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace state={{ from: location, reason: "not_authorized" }} />;
   }
 
   return <Outlet />;

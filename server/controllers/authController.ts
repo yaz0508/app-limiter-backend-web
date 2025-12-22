@@ -12,7 +12,8 @@ import {
 export const register = async (req: Request, res: Response) => {
   const { email, name, password } = req.body;
   try {
-    const user = await createUser({ email, name, password, role: Role.PARENT });
+    // Mobile users register as USER. The web dashboard is intended for admins only.
+    const user = await createUser({ email, name, password, role: Role.USER });
     const token = generateToken({ id: user.id, email: user.email, role: user.role });
     res.status(201).json({ user, token });
   } catch (err) {

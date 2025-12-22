@@ -13,6 +13,7 @@ export interface Device {
   os?: string | null;
   deviceIdentifier: string;
   userId: string;
+  user?: User;
   limits?: Limit[];
 }
 

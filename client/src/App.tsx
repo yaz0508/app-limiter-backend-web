@@ -8,6 +8,9 @@ import Devices from "./pages/Devices";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import UsageAnalytics from "./pages/UsageAnalytics";
+import Users from "./pages/Users";
+import type { Role } from "./types";
+import UserDetail from "./pages/UserDetail";
 
 const App = () => {
   const { user } = useAuth();
@@ -15,10 +18,15 @@ const App = () => {
   const router = createBrowserRouter(
     createRoutesFromElements(
       <>
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
-        <Route element={<ProtectedRoute />}>
+        <Route
+          path="/login"
+          element={!user || user.role !== "ADMIN" ? <Login /> : <Navigate to="/" replace />}
+        />
+        <Route element={<ProtectedRoute allowed={["ADMIN" as Role]} />}>
           <Route element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
+            <Route path="users" element={<Users />} />
+            <Route path="users/:id" element={<UserDetail />} />
             <Route path="devices" element={<Devices />} />
             <Route path="limits" element={<AppLimits />} />
             <Route path="usage" element={<UsageAnalytics />} />

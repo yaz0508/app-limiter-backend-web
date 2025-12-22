@@ -20,10 +20,11 @@ const userBaseSchema = z.object({
 
 router.use(authenticate);
 
-router.get("/", authorizeRoles(Role.ADMIN, Role.PARENT), list);
+// Admin dashboard only: list all accounts requires ADMIN.
+router.get("/", authorizeRoles(Role.ADMIN), list);
 router.get(
   "/:id",
-  authorizeRoles(Role.ADMIN, Role.PARENT, Role.USER),
+  authorizeRoles(Role.ADMIN, Role.USER),
   validateRequest(
     z.object({
       params: z.object({ id: z.string() }),
@@ -38,7 +39,7 @@ router.post("/", authorizeRoles(Role.ADMIN), validateRequest(userBaseSchema), cr
 
 router.put(
   "/:id",
-  authorizeRoles(Role.ADMIN, Role.PARENT, Role.USER),
+  authorizeRoles(Role.ADMIN, Role.USER),
   validateRequest(
     z.object({
       params: z.object({ id: z.string() }),
