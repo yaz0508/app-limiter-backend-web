@@ -18,15 +18,20 @@ export const ingestUsageLog = async (input: {
 
   const app = await findOrCreateApp(input.appPackage, input.appName);
 
-  return prisma.usageLog.create({
+  const occurredAt = input.occurredAt ?? new Date();
+  const log = await prisma.usageLog.create({
     data: {
       deviceId: device.id,
       appId: app.id,
       userId: device.userId,
       durationSeconds: input.durationSeconds,
-      occurredAt: input.occurredAt ?? new Date(),
+      occurredAt: occurredAt,
     },
   });
+
+  console.log(`[UsageService] Ingested usage log: device=${device.id}, app=${app.packageName}, duration=${input.durationSeconds}s, occurredAt=${occurredAt.toISOString()}`);
+
+  return log;
 };
 
 type DateRange = { start: Date; end: Date };
@@ -110,8 +115,28 @@ export const getDailySummary = async (deviceId: string, dateISO?: string) => {
   end.setUTCDate(end.getUTCDate() + 1);
   end.setUTCMilliseconds(end.getUTCMilliseconds() - 1);
 
+  console.log(`[UsageService] getDailySummary: deviceId=${deviceId}, start=${start.toISOString()}, end=${end.toISOString()}`);
+
+  // First, check if there are any usage logs for this device at all
+  const totalLogs = await prisma.usageLog.count({
+    where: { deviceId: deviceId }
+  });
+  console.log(`[UsageService] Total usage logs for device: ${totalLogs}`);
+
+  // Check logs in the date range
+  const logsInRange = await prisma.usageLog.count({
+    where: {
+      deviceId: deviceId,
+      occurredAt: { gte: start, lte: end }
+    }
+  });
+  console.log(`[UsageService] Usage logs in date range: ${logsInRange}`);
+
   const aggregates = await aggregateUsage(deviceId, { start, end });
   const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);
+
+  console.log(`[UsageService] Aggregated ${aggregates.length} apps, totalSeconds: ${totalSeconds}`);
+
   // Always return data structure, even if empty
   return {
     date: start.toISOString(),

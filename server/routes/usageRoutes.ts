@@ -2,11 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { customRangeSummary, dailySummary, ingest, weeklySummary } from "../controllers/usageController";
 import { authenticate, authorizeRoles } from "../middleware/authMiddleware";
+import { optionalAuthenticate } from "../middleware/optionalAuthMiddleware";
 import { validateRequest } from "../middleware/validateRequest";
 import { Role } from "@prisma/client";
 
 const router = Router();
 
+// Usage logs endpoint - allow either API key OR JWT authentication
 router.post(
   "/logs",
   validateRequest(
@@ -26,11 +28,22 @@ router.post(
       query: z.object({}).optional(),
     })
   ),
+  // Try optional JWT authentication (doesn't fail if missing)
+  optionalAuthenticate,
+  // Then check if we have either JWT auth OR API key
   (req, res, next) => {
     const ingestionKey = process.env.INGESTION_API_KEY;
-    if (ingestionKey && req.headers["x-api-key"] !== ingestionKey) {
-      return res.status(401).json({ message: "Invalid ingestion key" });
+    const hasJwtAuth = !!req.user;
+    const hasApiKey = ingestionKey && req.headers["x-api-key"] === ingestionKey;
+
+    if (!hasJwtAuth && !hasApiKey) {
+      if (ingestionKey) {
+        return res.status(401).json({ message: "Authentication required (JWT token or API key)" });
+      }
+      // No API key configured, allow unauthenticated (development only)
+      console.warn("[UsageRoutes] /logs called without auth and no INGESTION_API_KEY set - allowing for development");
     }
+
     return ingest(req, res).catch(next);
   }
 );

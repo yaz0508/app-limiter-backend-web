@@ -10,10 +10,20 @@ import {
 
 export const ingest = async (req: Request, res: Response) => {
   try {
+    console.log(`[UsageController] Ingesting usage log:`, {
+      deviceIdentifier: req.body.deviceIdentifier,
+      appPackage: req.body.appPackage,
+      durationSeconds: req.body.durationSeconds,
+      occurredAt: req.body.occurredAt,
+      authenticated: !!req.user
+    });
+
     const log = await ingestUsageLog(req.body);
+    console.log(`[UsageController] Successfully ingested usage log: id=${log.id}`);
     res.status(201).json({ log });
   } catch (err) {
     const msg = (err as Error).message;
+    console.error(`[UsageController] Error ingesting usage log:`, err);
     if (msg === "DeviceNotRegistered") {
       return res.status(400).json({ message: "Device not registered" });
     }
