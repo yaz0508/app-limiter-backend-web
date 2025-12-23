@@ -49,7 +49,9 @@ const isSystemApp = (packageName: string): boolean => {
   }
 
   // Common OEM system apps (Transsion, Samsung, Xiaomi, etc.)
+  // Check for Transsion apps (can be com.transsion.* or *.transsion)
   if (lowerPkg.startsWith('com.transsion.') ||
+    lowerPkg.includes('.transsion') ||
     lowerPkg.startsWith('com.samsung.android.') ||
     lowerPkg.startsWith('com.miui.') ||
     lowerPkg.startsWith('com.xiaomi.') ||
