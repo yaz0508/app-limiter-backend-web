@@ -14,7 +14,7 @@ export const createUser = async (data: {
             email: data.email.toLowerCase(),
             name: data.name,
             passwordHash: hashed,
-            role: data.role ?? Role.PARENT,
+            role: data.role ?? Role.USER,
         },
         select: {
             id: true,

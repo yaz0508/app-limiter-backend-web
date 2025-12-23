@@ -52,7 +52,12 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
         as: "app",
       },
     },
-    { $unwind: "$app" },
+    {
+      $unwind: {
+        path: "$app",
+        preserveNullAndEmptyArrays: false
+      }
+    },
     {
       $group: {
         _id: "$appId",
@@ -76,13 +81,80 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
     { $sort: { totalSeconds: -1 } },
   ];
 
-  const result = (await prisma.$runCommandRaw({
-    aggregate: "UsageLog",
-    pipeline,
-    cursor: {},
-  })) as { cursor?: { firstBatch?: any[] } };
+  // First, check if there are any logs to aggregate
+  const logCount = await prisma.usageLog.count({
+    where: {
+      deviceId: deviceId,
+      occurredAt: { gte: range.start, lte: range.end },
+    },
+  });
 
-  return result.cursor?.firstBatch ?? [];
+  if (logCount === 0) {
+    console.log(`[UsageService] No logs found for aggregation`);
+    return [];
+  }
+
+  console.log(`[UsageService] Found ${logCount} logs to aggregate, attempting MongoDB aggregation...`);
+
+  try {
+    const result = (await prisma.$runCommandRaw({
+      aggregate: "UsageLog",
+      pipeline,
+      cursor: {},
+    })) as { cursor?: { firstBatch?: any[] } };
+
+    const aggregates = result.cursor?.firstBatch ?? [];
+    console.log(`[UsageService] MongoDB aggregation result: ${aggregates.length} apps found`);
+
+    // If we have logs but aggregation returned 0, use fallback
+    if (logCount > 0 && aggregates.length === 0) {
+      console.log(`[UsageService] MongoDB aggregation returned 0 results despite ${logCount} logs, using Prisma fallback...`);
+      throw new Error("Aggregation returned empty results");
+    }
+
+    if (aggregates.length > 0) {
+      console.log(`[UsageService] Sample aggregate:`, JSON.stringify(aggregates[0], null, 2));
+    }
+    return aggregates;
+  } catch (error) {
+    console.error(`[UsageService] MongoDB aggregation error or empty result, using Prisma fallback:`, error);
+    // Fallback: use Prisma's native queries (more reliable)
+    const logs = await prisma.usageLog.findMany({
+      where: {
+        deviceId: deviceId,
+        occurredAt: { gte: range.start, lte: range.end },
+      },
+      include: { app: true },
+    });
+
+    console.log(`[UsageService] Fallback: Found ${logs.length} logs via Prisma`);
+
+    // Manual aggregation
+    const grouped = new Map<string, { totalSeconds: number; sessions: number; app: any }>();
+    for (const log of logs) {
+      if (!log.app) {
+        console.warn(`[UsageService] Log ${log.id} has no app relation, skipping`);
+        continue;
+      }
+      const key = log.appId;
+      const existing = grouped.get(key) || { totalSeconds: 0, sessions: 0, app: log.app };
+      existing.totalSeconds += log.durationSeconds;
+      existing.sessions += 1;
+      grouped.set(key, existing);
+    }
+
+    const result = Array.from(grouped.entries()).map(([appId, data]) => ({
+      appId,
+      appName: data.app.name,
+      packageName: data.app.packageName,
+      totalSeconds: data.totalSeconds,
+      totalMinutes: data.totalSeconds / 60,
+      sessions: data.sessions,
+    })).sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    console.log(`[UsageService] Fallback aggregation result: ${result.length} apps found`);
+    return result;
+  }
 };
 
 // Helper to get start of day in PH timezone (UTC+8)
@@ -131,6 +203,24 @@ export const getDailySummary = async (deviceId: string, dateISO?: string) => {
     }
   });
   console.log(`[UsageService] Usage logs in date range: ${logsInRange}`);
+
+  // Debug: Check a sample log to see its structure
+  if (logsInRange > 0) {
+    const sampleLog = await prisma.usageLog.findFirst({
+      where: {
+        deviceId: deviceId,
+        occurredAt: { gte: start, lte: end }
+      },
+      include: { app: true }
+    });
+    console.log(`[UsageService] Sample log:`, {
+      deviceId: sampleLog?.deviceId,
+      appId: sampleLog?.appId,
+      appName: sampleLog?.app?.name,
+      durationSeconds: sampleLog?.durationSeconds,
+      occurredAt: sampleLog?.occurredAt
+    });
+  }
 
   const aggregates = await aggregateUsage(deviceId, { start, end });
   const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);

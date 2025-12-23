@@ -9,7 +9,6 @@ datasource db {
 
 enum Role {
   ADMIN
-  PARENT
   USER
 }
 
@@ -18,7 +17,7 @@ model User {
   email        String      @unique
   passwordHash String
   name         String
-  role         Role        @default(PARENT)
+  role         Role        @default(USER)
   devices      Device[]
   createdLimits Limit[]    @relation("UserCreatedLimits")
   createdAt    DateTime    @default(now())

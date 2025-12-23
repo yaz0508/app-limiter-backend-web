@@ -134,7 +134,6 @@ const Users = () => {
           <option value="all">All Roles</option>
           <option value="ADMIN">Admin</option>
           <option value="USER">User</option>
-          <option value="PARENT">Parent</option>
         </select>
         {(searchQuery || roleFilter !== "all") && (
           <button

@@ -82,7 +82,6 @@ const EditUserModal = ({ user, onClose, onSave }: Props) => {
             >
               <option value="USER">User</option>
               <option value="ADMIN">Admin</option>
-              <option value="PARENT">Parent</option>
             </select>
           </div>
           <div>
