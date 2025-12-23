@@ -65,7 +65,14 @@ const isSystemApp = (packageName: string): boolean => {
   // Google system services (but not user apps like Gmail, Maps)
   if (lowerPkg.startsWith('com.google.android.gms') ||
     lowerPkg.startsWith('com.google.android.apps.nexuslauncher') ||
-    lowerPkg.startsWith('com.google.android.setupwizard')) {
+    lowerPkg.startsWith('com.google.android.setupwizard') ||
+    lowerPkg.startsWith('com.google.android.inputmethod') || // Google Keyboard and other input methods
+    lowerPkg.startsWith('com.google.android.apps.inputmethod')) { // Google Input Tools
+    return true;
+  }
+
+  // Input methods (keyboards) - system apps
+  if (lowerPkg.includes('inputmethod') || lowerPkg.includes('keyboard')) {
     return true;
   }
 
