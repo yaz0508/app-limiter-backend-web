@@ -45,11 +45,17 @@ const UsageAnalytics = () => {
             ? getCustomRangeUsage(token, selectedDevice, dateRange.start, dateRange.end)
             : getWeeklyUsage(token, selectedDevice),
         ]);
+        console.log("Daily summary:", d);
+        console.log("Weekly summary:", w);
         setDaily(d);
         setWeekly(w);
       } catch (err) {
-        setError((err as Error).message);
+        const errorMessage = (err as Error).message;
+        setError(errorMessage);
         console.error("Error loading analytics:", err);
+        // Clear data on error
+        setDaily(null);
+        setWeekly(null);
       } finally {
         setLoading(false);
       }
@@ -119,26 +125,35 @@ const UsageAnalytics = () => {
                 </span>
               )}
             </div>
-            {daily && daily.byApp.length > 0 ? (
-              <>
-                <div className="mb-2 text-sm text-slate-600">
-                  Total: {Math.round(daily.totalSeconds / 60)} minutes
+            {daily ? (
+              daily.byApp.length > 0 ? (
+                <>
+                  <div className="mb-2 text-sm text-slate-600">
+                    Total: {Math.round(daily.totalSeconds / 60)} minutes
+                  </div>
+                  <Table
+                    headers={["App", "Minutes", "Sessions"]}
+                    rows={daily.byApp.map((item) => [
+                      <div key="app">
+                        <div className="font-semibold">{item.appName}</div>
+                        <div className="text-xs text-slate-500">{item.packageName}</div>
+                      </div>,
+                      `${item.totalMinutes.toFixed(1)} mins`,
+                      item.sessions,
+                    ])}
+                    emptyMessage="No data yet"
+                  />
+                </>
+              ) : (
+                <div className="py-6 text-center text-slate-500">
+                  <p className="mb-2">No usage reported today.</p>
+                  <p className="text-xs text-slate-400">
+                    Usage data will appear here after apps with limits are used and synced to the server.
+                  </p>
                 </div>
-                <Table
-                  headers={["App", "Minutes", "Sessions"]}
-                  rows={daily.byApp.map((item) => [
-                    <div key="app">
-                      <div className="font-semibold">{item.appName}</div>
-                      <div className="text-xs text-slate-500">{item.packageName}</div>
-                    </div>,
-                    `${item.totalMinutes.toFixed(1)} mins`,
-                    item.sessions,
-                  ])}
-                  emptyMessage="No data yet"
-                />
-              </>
+              )
             ) : (
-              <div className="py-6 text-center text-slate-500">No usage reported today.</div>
+              <div className="py-6 text-center text-slate-500">Loading today's data...</div>
             )}
           </div>
 
@@ -154,15 +169,24 @@ const UsageAnalytics = () => {
                 </span>
               )}
             </div>
-            {weekly && weekly.byApp.length > 0 ? (
-              <>
-                <div className="mb-4 text-sm text-slate-600">
-                  Total: {Math.round(weekly.totalSeconds / 60)} minutes across {weekly.byApp.length} apps
+            {weekly ? (
+              weekly.byApp.length > 0 ? (
+                <>
+                  <div className="mb-4 text-sm text-slate-600">
+                    Total: {Math.round(weekly.totalSeconds / 60)} minutes across {weekly.byApp.length} apps
+                  </div>
+                  <UsageChart data={weekly.byApp.slice(0, 10)} />
+                </>
+              ) : (
+                <div className="py-6 text-center text-slate-500">
+                  <p className="mb-2">No usage data for this period.</p>
+                  <p className="text-xs text-slate-400">
+                    Usage data will appear here after apps with limits are used and synced to the server.
+                  </p>
                 </div>
-                <UsageChart data={weekly.byApp.slice(0, 10)} />
-              </>
+              )
             ) : (
-              <div className="py-6 text-center text-slate-500">No usage yet.</div>
+              <div className="py-6 text-center text-slate-500">Loading weekly data...</div>
             )}
           </div>
         </>

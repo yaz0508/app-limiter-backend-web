@@ -136,6 +136,26 @@ export const getCustomRangeUsage = (token: string, deviceId: string, start: stri
   return apiRequest<WeeklyUsageSummary>(`/usage/summary/range/${deviceId}${query}`, { token });
 };
 
+// Analytics API endpoints
+export const getDailyAnalytics = (token: string, deviceId: string) =>
+  apiRequest<any>(`/analytics/daily/${deviceId}`, { token });
+
+export const getWeeklyAnalytics = (token: string, deviceId: string) =>
+  apiRequest<any>(`/analytics/weekly/${deviceId}`, { token });
+
+export const getMonthlyAnalytics = (token: string, deviceId: string) =>
+  apiRequest<any>(`/analytics/monthly/${deviceId}`, { token });
+
+export const getTopApps = (token: string, deviceId: string, period: string = "weekly", limit: number = 5) => {
+  const query = `?period=${encodeURIComponent(period)}&limit=${limit}`;
+  return apiRequest<{ topApps: any[] }>(`/analytics/top-apps/${deviceId}${query}`, { token });
+};
+
+export const getBlockEvents = (token: string, deviceId: string, limit: number = 50) => {
+  const query = `?limit=${limit}`;
+  return apiRequest<{ events: any[] }>(`/analytics/block-events/${deviceId}${query}`, { token });
+};
+
 export const updateUser = (
   token: string,
   userId: string,

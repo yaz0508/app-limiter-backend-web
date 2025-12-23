@@ -10,6 +10,7 @@ import { deviceRouter } from "./routes/deviceRoutes";
 import { limitRouter } from "./routes/limitRoutes";
 import { usageRouter } from "./routes/usageRoutes";
 import { appRouter } from "./routes/appRoutes";
+import analyticsRouter from "./routes/analyticsRoutes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 dotenv.config();
@@ -111,6 +112,7 @@ app.use("/api/devices", deviceRouter);
 app.use("/api/limits", limitRouter);
 app.use("/api/usage", usageRouter);
 app.use("/api/apps", appRouter);
+app.use("/api/analytics", analyticsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

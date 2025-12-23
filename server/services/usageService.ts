@@ -112,16 +112,32 @@ export const getDailySummary = async (deviceId: string, dateISO?: string) => {
 
   const aggregates = await aggregateUsage(deviceId, { start, end });
   const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);
-  return { date: start.toISOString(), totalSeconds, byApp: aggregates };
+  // Always return data structure, even if empty
+  return {
+    date: start.toISOString(),
+    totalSeconds: totalSeconds || 0,
+    byApp: aggregates || []
+  };
 };
 
 export const getWeeklySummary = async (
   deviceId: string,
   startDateISO?: string
 ) => {
-  const start = startDateISO ? new Date(startDateISO) : new Date();
-  // Align to start of day in PH timezone
-  const normalized = getStartOfDayPH(start);
+  let normalized: Date;
+  if (startDateISO) {
+    normalized = getStartOfDayPH(new Date(startDateISO));
+  } else {
+    // Default to start of current week (Monday) in PH timezone
+    const now = new Date();
+    const phNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+    const dayOfWeek = phNow.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to Monday = 0
+    phNow.setDate(phNow.getDate() - daysToMonday);
+    phNow.setHours(0, 0, 0, 0);
+    // Convert back to UTC for database query
+    normalized = getStartOfDayPH(phNow);
+  }
   const end = new Date(normalized);
   end.setUTCDate(end.getUTCDate() + 7);
   end.setUTCMilliseconds(end.getUTCMilliseconds() - 1);
@@ -131,11 +147,12 @@ export const getWeeklySummary = async (
     end,
   });
   const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);
+  // Always return data structure, even if empty
   return {
     start: normalized.toISOString(),
     end: end.toISOString(),
-    totalSeconds,
-    byApp: aggregates,
+    totalSeconds: totalSeconds || 0,
+    byApp: aggregates || [],
   };
 };
 
@@ -156,11 +173,12 @@ export const getCustomRangeSummary = async (
     end: normalizedEnd,
   });
   const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);
+  // Always return data structure, even if empty
   return {
     start: normalizedStart.toISOString(),
     end: normalizedEnd.toISOString(),
-    totalSeconds,
-    byApp: aggregates,
+    totalSeconds: totalSeconds || 0,
+    byApp: aggregates || [],
   };
 };
 
