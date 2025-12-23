@@ -55,6 +55,15 @@ const UsageAnalytics = () => {
       }
     };
     load();
+    
+    // Real-time updates: refresh every 30 seconds
+    const interval = setInterval(() => {
+      if (token && selectedDevice && !dateRange) {
+        load();
+      }
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, [token, selectedDevice, dateRange]);
 
   return (

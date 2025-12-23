@@ -50,6 +50,15 @@ const Dashboard = () => {
       }
     };
     loadUsage();
+    
+    // Real-time updates: refresh every 30 seconds
+    const interval = setInterval(() => {
+      if (token && selectedDevice && !dateRange) {
+        loadUsage();
+      }
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, [token, selectedDevice, dateRange]);
 
   const totalMinutes = useMemo(() => {

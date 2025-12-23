@@ -80,9 +80,32 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
   return result.cursor?.firstBatch ?? [];
 };
 
+// Helper to get start of day in PH timezone (UTC+8)
+// PH time is UTC+8, so midnight PH = 4 PM UTC previous day
+const getStartOfDayPH = (date: Date): Date => {
+  // Format date in PH timezone to get the date string
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parseInt(parts.find(p => p.type === "year")!.value);
+  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1; // 0-indexed
+  const day = parseInt(parts.find(p => p.type === "day")!.value);
+
+  // Create date at midnight PH time (00:00:00 PH = 16:00:00 UTC previous day)
+  // We create it as if it were UTC, then adjust
+  const phMidnightUTC = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+  // PH is UTC+8, so subtract 8 hours to get the UTC equivalent
+  return new Date(phMidnightUTC.getTime() - 8 * 60 * 60 * 1000);
+};
+
 export const getDailySummary = async (deviceId: string, dateISO?: string) => {
   const target = dateISO ? new Date(dateISO) : new Date();
-  const start = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate()));
+  // Get start of day in PH timezone (12:00 AM PH = 4:00 PM UTC previous day)
+  const start = getStartOfDayPH(target);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
   end.setUTCMilliseconds(end.getUTCMilliseconds() - 1);
@@ -97,10 +120,8 @@ export const getWeeklySummary = async (
   startDateISO?: string
 ) => {
   const start = startDateISO ? new Date(startDateISO) : new Date();
-  // Align to start of day
-  const normalized = new Date(
-    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
-  );
+  // Align to start of day in PH timezone
+  const normalized = getStartOfDayPH(start);
   const end = new Date(normalized);
   end.setUTCDate(end.getUTCDate() + 7);
   end.setUTCMilliseconds(end.getUTCMilliseconds() - 1);
@@ -124,13 +145,9 @@ export const getCustomRangeSummary = async (
   endDateISO: string
 ) => {
   const start = new Date(startDateISO);
-  const normalizedStart = new Date(
-    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
-  );
+  const normalizedStart = getStartOfDayPH(start);
   const end = new Date(endDateISO);
-  const normalizedEnd = new Date(
-    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
-  );
+  const normalizedEnd = getStartOfDayPH(end);
   normalizedEnd.setUTCDate(normalizedEnd.getUTCDate() + 1);
   normalizedEnd.setUTCMilliseconds(normalizedEnd.getUTCMilliseconds() - 1);
 
