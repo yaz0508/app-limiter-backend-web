@@ -36,6 +36,40 @@ export const ingestUsageLog = async (input: {
 
 type DateRange = { start: Date; end: Date };
 
+// Helper to check if a package is a system/OEM app that shouldn't be shown in analytics
+const isSystemApp = (packageName: string): boolean => {
+  const lowerPkg = packageName.toLowerCase();
+
+  // Android system apps
+  if (lowerPkg.startsWith('com.android.systemui') ||
+    lowerPkg.startsWith('com.android.settings') ||
+    lowerPkg === 'android' ||
+    lowerPkg.startsWith('android.')) {
+    return true;
+  }
+
+  // Common OEM system apps (Transsion, Samsung, Xiaomi, etc.)
+  if (lowerPkg.startsWith('com.transsion.') ||
+    lowerPkg.startsWith('com.samsung.android.') ||
+    lowerPkg.startsWith('com.miui.') ||
+    lowerPkg.startsWith('com.xiaomi.') ||
+    lowerPkg.startsWith('com.huawei.') ||
+    lowerPkg.startsWith('com.oppo.') ||
+    lowerPkg.startsWith('com.vivo.') ||
+    lowerPkg.startsWith('com.oneplus.')) {
+    return true;
+  }
+
+  // Google system services (but not user apps like Gmail, Maps)
+  if (lowerPkg.startsWith('com.google.android.gms') ||
+    lowerPkg.startsWith('com.google.android.apps.nexuslauncher') ||
+    lowerPkg.startsWith('com.google.android.setupwizard')) {
+    return true;
+  }
+
+  return false;
+};
+
 const aggregateUsage = async (deviceId: string, range: DateRange) => {
   const pipeline = [
     {
@@ -103,8 +137,12 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
       cursor: {},
     })) as { cursor?: { firstBatch?: any[] } };
 
-    const aggregates = result.cursor?.firstBatch ?? [];
-    console.log(`[UsageService] MongoDB aggregation result: ${aggregates.length} apps found`);
+    let aggregates = result.cursor?.firstBatch ?? [];
+
+    // Filter out system apps
+    aggregates = aggregates.filter((item: any) => !isSystemApp(item.packageName || ''));
+
+    console.log(`[UsageService] MongoDB aggregation result: ${aggregates.length} apps found (after filtering system apps)`);
 
     // If we have logs but aggregation returned 0, use fallback
     if (logCount > 0 && aggregates.length === 0) {
@@ -143,16 +181,19 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
       grouped.set(key, existing);
     }
 
-    const result = Array.from(grouped.entries()).map(([appId, data]) => ({
-      appId,
-      appName: data.app.name,
-      packageName: data.app.packageName,
-      totalSeconds: data.totalSeconds,
-      totalMinutes: data.totalSeconds / 60,
-      sessions: data.sessions,
-    })).sort((a, b) => b.totalSeconds - a.totalSeconds);
+    const result = Array.from(grouped.entries())
+      .map(([appId, data]) => ({
+        appId,
+        appName: data.app.name,
+        packageName: data.app.packageName,
+        totalSeconds: data.totalSeconds,
+        totalMinutes: data.totalSeconds / 60,
+        sessions: data.sessions,
+      }))
+      .filter(item => !isSystemApp(item.packageName)) // Filter out system apps
+      .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
-    console.log(`[UsageService] Fallback aggregation result: ${result.length} apps found`);
+    console.log(`[UsageService] Fallback aggregation result: ${result.length} apps found (after filtering system apps)`);
     return result;
   }
 };
