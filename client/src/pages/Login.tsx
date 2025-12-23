@@ -11,14 +11,24 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter both email and password");
+      return;
+    }
+    
     try {
-      await login(email, password);
+      console.log("[Login] Form submitted, attempting login for:", email);
+      await login(email.trim(), password);
+      console.log("[Login] Login successful, navigating to:", redirect);
       navigate(redirect, { replace: true });
     } catch (err) {
-      setError((err as Error).message);
+      console.error("[Login] Login error:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to sign in. Please check your credentials.";
+      setError(errorMessage);
     }
   };
 
@@ -51,8 +61,8 @@ const Login = () => {
           {error && <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-primary px-4 py-2 text-white shadow hover:bg-blue-600 disabled:opacity-70"
+            disabled={loading || !email.trim() || !password.trim()}
+            className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white shadow hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>

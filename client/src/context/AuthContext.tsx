@@ -46,13 +46,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
+      console.log("AuthContext: Calling loginRequest...");
       const resp = await loginRequest(email, password);
+      console.log("AuthContext: Login response received:", { role: resp.user.role, email: resp.user.email });
       if (resp.user.role !== "ADMIN") {
         throw new Error("This dashboard is for admins only.");
       }
       setToken(resp.token);
       setUser(resp.user);
       sessionStorage.setItem("auth_token", resp.token);
+      console.log("AuthContext: Login successful, token saved");
+    } catch (err) {
+      console.error("AuthContext: Login error:", err);
+      throw err;
     } finally {
       setLoading(false);
     }

@@ -25,19 +25,28 @@ const apiRequest = async <T>(path: string, options: Options = {}): Promise<T> =>
     headers.Authorization = `Bearer ${options.token}`;
   }
 
+  const url = `${API_URL}${path}`;
+  console.log(`[API] ${options.method || "GET"} ${url}`, options.body ? { body: JSON.parse(JSON.stringify(options.body)) } : "");
+
   try {
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetch(url, {
       method: options.method ?? "GET",
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
     });
 
+    console.log(`[API] Response status: ${res.status} ${res.statusText}`);
+
     if (!res.ok) {
-      const message = (await res.json().catch(() => ({}))).message || res.statusText;
+      const errorData = await res.json().catch(() => ({}));
+      const message = errorData.message || res.statusText;
+      console.error(`[API] Error response:`, errorData);
       throw new Error(message);
     }
 
-    return res.json();
+    const data = await res.json();
+    console.log(`[API] Success response:`, data);
+    return data;
   } catch (error) {
     // Handle network errors (connection refused, CORS, timeout, etc.)
     if (
