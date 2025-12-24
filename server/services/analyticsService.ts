@@ -71,18 +71,46 @@ export const syncAnalytics = async (input: {
       // Convert minutes to seconds for storage
       const durationSeconds = dailyMinutes * 60;
 
-      // For aggregated analytics, we create a single log entry per app per day
-      // The backend aggregation will handle summing these up correctly
-      // We use occurredAt to represent the date (noon UTC to avoid timezone issues)
-      await prisma.usageLog.create({
-        data: {
+      // Check if a log already exists for this app/date/device combination
+      // If it exists, update it; otherwise create a new one
+      // This prevents duplicate entries from multiple syncs that would cause inflated totals
+      const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+      const dayEnd = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
+      
+      const existingLog = await prisma.usageLog.findFirst({
+        where: {
           deviceId: device.id,
           appId: app.id,
-          userId: device.userId,
-          durationSeconds: durationSeconds,
-          occurredAt: date,
+          occurredAt: {
+            gte: dayStart,
+            lt: dayEnd,
+          },
         },
       });
+
+      if (existingLog) {
+        // Update existing log with new data (in case usage increased during the day)
+        await prisma.usageLog.update({
+          where: { id: existingLog.id },
+          data: {
+            durationSeconds: durationSeconds,
+            occurredAt: date,
+          },
+        });
+        console.log(`[AnalyticsService] Updated existing log for ${summary.appPackage} on ${summary.date}: ${dailyMinutes} minutes`);
+      } else {
+        // Create new log entry
+        await prisma.usageLog.create({
+          data: {
+            deviceId: device.id,
+            appId: app.id,
+            userId: device.userId,
+            durationSeconds: durationSeconds,
+            occurredAt: date,
+          },
+        });
+        console.log(`[AnalyticsService] Created new log for ${summary.appPackage} on ${summary.date}: ${dailyMinutes} minutes`);
+      }
 
       synced++;
     } catch (error) {
