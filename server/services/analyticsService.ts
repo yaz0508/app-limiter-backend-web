@@ -71,13 +71,13 @@ export const syncAnalytics = async (input: {
       // Convert minutes to seconds for storage
       const durationSeconds = dailyMinutes * 60;
 
-      // Check if a log already exists for this app/date/device combination
-      // If it exists, update it; otherwise create a new one
+      // Check if logs already exist for this app/date/device combination
+      // If they exist, update one and delete the rest (deduplication)
       // This prevents duplicate entries from multiple syncs that would cause inflated totals
       const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
       const dayEnd = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
       
-      const existingLog = await prisma.usageLog.findFirst({
+      const existingLogs = await prisma.usageLog.findMany({
         where: {
           deviceId: device.id,
           appId: app.id,
@@ -86,18 +86,34 @@ export const syncAnalytics = async (input: {
             lt: dayEnd,
           },
         },
+        orderBy: {
+          createdAt: 'desc', // Keep the most recent one
+        },
       });
 
-      if (existingLog) {
-        // Update existing log with new data (in case usage increased during the day)
+      if (existingLogs.length > 0) {
+        // Update the first (most recent) log with new data
+        const logToUpdate = existingLogs[0];
         await prisma.usageLog.update({
-          where: { id: existingLog.id },
+          where: { id: logToUpdate.id },
           data: {
             durationSeconds: durationSeconds,
             occurredAt: date,
           },
         });
-        console.log(`[AnalyticsService] Updated existing log for ${summary.appPackage} on ${summary.date}: ${dailyMinutes} minutes`);
+        
+        // Delete all other duplicate logs for this app/date/device
+        if (existingLogs.length > 1) {
+          const duplicateIds = existingLogs.slice(1).map(log => log.id);
+          await prisma.usageLog.deleteMany({
+            where: {
+              id: { in: duplicateIds },
+            },
+          });
+          console.log(`[AnalyticsService] Updated log and deleted ${duplicateIds.length} duplicate(s) for ${summary.appPackage} on ${summary.date}: ${dailyMinutes} minutes`);
+        } else {
+          console.log(`[AnalyticsService] Updated existing log for ${summary.appPackage} on ${summary.date}: ${dailyMinutes} minutes`);
+        }
       } else {
         // Create new log entry
         await prisma.usageLog.create({
