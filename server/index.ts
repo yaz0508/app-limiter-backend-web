@@ -10,7 +10,7 @@ import { deviceRouter } from "./routes/deviceRoutes";
 import { limitRouter } from "./routes/limitRoutes";
 import { usageRouter } from "./routes/usageRoutes";
 import { appRouter } from "./routes/appRoutes";
-import analyticsRouter from "./routes/analyticsRoutes";
+import { analyticsRouter } from "./routes/analyticsRoutes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 dotenv.config();

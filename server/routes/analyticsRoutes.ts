@@ -1,28 +1,52 @@
 import { Router } from "express";
-import { authenticate, authorizeRoles } from "../middleware/authMiddleware";
-import { Role } from "@prisma/client";
-import {
-  getDailyAnalytics,
-  getWeeklyAnalytics,
-  getMonthlyAnalytics,
-  getTopApps,
-  getBlockEvents,
-  syncAnalytics,
-} from "../controllers/analyticsController";
+import { z } from "zod";
+import { sync } from "../controllers/analyticsController";
+import { optionalAuthenticate } from "../middleware/optionalAuthMiddleware";
+import { validateRequest } from "../middleware/validateRequest";
 
 const router = Router();
 
-// All analytics routes require authentication
-router.use(authenticate, authorizeRoles(Role.ADMIN, Role.USER));
+// Analytics sync endpoint - allow either API key OR JWT authentication
+router.post(
+  "/sync",
+  validateRequest(
+    z.object({
+      body: z.object({
+        deviceIdentifier: z.string().min(3),
+        summaries: z.array(
+          z.object({
+            appPackage: z.string().min(1),
+            appName: z.string().optional(),
+            date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+            dailyMinutes: z.number().int().min(0),
+            weeklyMinutes: z.number().int().min(0).optional(),
+            monthlyMinutes: z.number().int().min(0).optional(),
+            isBlocked: z.boolean().optional(),
+          })
+        ),
+      }),
+      params: z.object({}).optional(),
+      query: z.object({}).optional(),
+    })
+  ),
+  // Try optional JWT authentication (doesn't fail if missing)
+  optionalAuthenticate,
+  // Then check if we have either JWT auth OR API key
+  (req, res, next) => {
+    const ingestionKey = process.env.INGESTION_API_KEY;
+    const hasJwtAuth = !!req.user;
+    const hasApiKey = ingestionKey && req.headers["x-api-key"] === ingestionKey;
 
-// Analytics sync endpoint (receives aggregated data from Android)
-router.post("/sync", syncAnalytics);
+    if (!hasJwtAuth && !hasApiKey) {
+      if (ingestionKey) {
+        return res.status(401).json({ message: "Authentication required (JWT token or API key)" });
+      }
+      // No API key configured, allow unauthenticated (development only)
+      console.warn("[AnalyticsRoutes] /sync called without auth and no INGESTION_API_KEY set - allowing for development");
+    }
 
-// Analytics retrieval endpoints
-router.get("/daily/:deviceId", getDailyAnalytics);
-router.get("/weekly/:deviceId", getWeeklyAnalytics);
-router.get("/monthly/:deviceId", getMonthlyAnalytics);
-router.get("/top-apps/:deviceId", getTopApps);
-router.get("/block-events/:deviceId", getBlockEvents);
+    return sync(req, res).catch(next);
+  }
+);
 
-export default router;
+export const analyticsRouter = router;
