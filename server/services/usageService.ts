@@ -55,7 +55,13 @@ const isSystemApp = (packageName: string): boolean => {
   if (lowerPkg.startsWith('com.android.systemui') ||
     lowerPkg.startsWith('com.android.settings') ||
     lowerPkg === 'android' ||
-    lowerPkg.startsWith('android.')) {
+    lowerPkg.startsWith('android.') ||
+    lowerPkg === 'com.android.vending') { // Google Play Store
+    return true;
+  }
+  
+  // App Limiter itself (don't track own usage)
+  if (lowerPkg === 'com.example.applimiter') {
     return true;
   }
 
