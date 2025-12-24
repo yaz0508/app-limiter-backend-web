@@ -76,6 +76,7 @@ corsConfig.origin =
 
       // Check exact match
       if (allowedOrigins.includes(origin) || allowedOrigins.includes(normalizedOrigin)) {
+        console.log(`[CORS] Allowing origin: ${origin}`);
         return callback(null, true);
       }
 
@@ -93,6 +94,8 @@ corsConfig.origin =
 
       // Log rejected origin for debugging
       console.warn(`[CORS] Rejected origin: ${origin}. Allowed origins: ${allowedOrigins.join(", ")}`);
+      console.warn(`[CORS] Normalized origin: ${normalizedOrigin}`);
+      console.warn(`[CORS] CORS_ORIGIN env: ${corsOrigin}`);
       return callback(new Error(`CORS origin not allowed: ${origin}`));
     };
 
@@ -100,13 +103,19 @@ corsConfig.origin =
 console.log("CORS Configuration:", {
   NODE_ENV,
   CORS_ORIGIN: corsOrigin || "(not set - using safe defaults)",
+  CORS_ORIGIN_RAW: JSON.stringify(corsOrigin),
   credentials: corsConfig.credentials,
   methods: corsConfig.methods,
   allowedOrigins: allowedOrigins.length === 0 ? "(none - all non-browser requests allowed)" : allowedOrigins,
+  allowedOriginsCount: allowedOrigins.length,
   note: "Requests without Origin header (Android apps, API tools) are always allowed",
 });
 
+// Apply CORS middleware
 app.use(cors(corsConfig));
+
+// Handle preflight requests explicitly (some browsers need this)
+app.options("*", cors(corsConfig));
 
 // Configure Helmet to work with CORS
 app.use(
