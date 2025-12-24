@@ -43,17 +43,17 @@ export const upsertLimit = async (data: {
         },
         // Don't include relations
       });
-      
+
       // Fetch app and device separately
       const [app, device] = await Promise.all([
         prisma.app.findUnique({ where: { id: data.appId } }),
         prisma.device.findUnique({ where: { id: data.deviceId } }),
       ]);
-      
+
       if (!app || !device) {
         throw new Error("App or device not found");
       }
-      
+
       return {
         ...limit,
         app,
@@ -70,7 +70,7 @@ export const listLimitsForDevice = async (deviceId: string) => {
       where: { deviceId },
       include: { app: true },
     });
-    
+
     // Filter out limits with missing apps (orphaned limits)
     return limits.filter((limit) => limit.app !== null);
   } catch (error: any) {
@@ -81,14 +81,14 @@ export const listLimitsForDevice = async (deviceId: string) => {
         where: { deviceId },
         // Don't include app relation
       });
-      
+
       // Fetch apps separately and filter out orphaned limits
       const appIds = limits.map((l) => l.appId);
       const apps = await prisma.app.findMany({
         where: { id: { in: appIds } },
       });
       const appMap = new Map(apps.map((a) => [a.id, a]));
-      
+
       return limits
         .filter((limit) => appMap.has(limit.appId))
         .map((limit) => ({
