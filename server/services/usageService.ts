@@ -89,6 +89,70 @@ const isSystemApp = (packageName: string): boolean => {
   return false;
 };
 
+// Helper function to extract a readable app name from a package name
+const extractAppNameFromPackage = (packageName: string): string => {
+  if (!packageName) return packageName;
+
+  // Split by dots
+  const parts = packageName.split('.');
+
+  // Remove common prefixes (com, org, net, etc.)
+  const meaningfulParts = parts.filter(part =>
+    part &&
+    part !== 'com' &&
+    part !== 'org' &&
+    part !== 'net' &&
+    part !== 'io' &&
+    part !== 'android' &&
+    part !== 'app'
+  );
+
+  if (meaningfulParts.length === 0) {
+    // If no meaningful parts, use the last part
+    const lastPart = parts[parts.length - 1];
+    return capitalizeWords(lastPart);
+  }
+
+  // Take the last meaningful part(s)
+  // For cases like "com.facebook.lite", we want "Facebook Lite"
+  // For cases like "wp.wattpad", we want "Wattpad"
+  const lastPart = meaningfulParts[meaningfulParts.length - 1];
+  const secondLastPart = meaningfulParts.length > 1 ? meaningfulParts[meaningfulParts.length - 2] : null;
+
+  // Handle common company patterns (facebook, google, microsoft, etc.)
+  // If secondLastPart is a known company name, combine it with the last part
+  const knownCompanies = ['facebook', 'google', 'microsoft', 'amazon', 'apple', 'twitter', 'instagram', 'whatsapp', 'telegram'];
+  if (secondLastPart && knownCompanies.includes(secondLastPart.toLowerCase())) {
+    return `${capitalizeWords(secondLastPart)} ${capitalizeWords(lastPart)}`;
+  }
+
+  // Handle single-word packages like "wattpad" from "wp.wattpad"
+  if (meaningfulParts.length === 1) {
+    return capitalizeWords(lastPart);
+  }
+
+  // Default: use the last meaningful part
+  return capitalizeWords(lastPart);
+};
+
+// Helper to capitalize words (e.g., "facebook" -> "Facebook", "wattpad" -> "Wattpad")
+const capitalizeWords = (str: string): string => {
+  if (!str) return str;
+  // Split by common separators and capitalize each word
+  return str
+    .split(/[-_]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+// Helper to format app name - use provided name if it's not a package name, otherwise extract from package
+const formatAppName = (appName: string | null | undefined, packageName: string): string => {
+  if (!appName || appName === packageName) {
+    return extractAppNameFromPackage(packageName);
+  }
+  return appName;
+};
+
 const aggregateUsage = async (deviceId: string, range: DateRange) => {
   const pipeline = [
     {
@@ -161,6 +225,12 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
     // Filter out system apps
     aggregates = aggregates.filter((item: any) => !isSystemApp(item.packageName || ''));
 
+    // Format app names to ensure readable names instead of package names
+    aggregates = aggregates.map((item: any) => ({
+      ...item,
+      appName: formatAppName(item.appName, item.packageName || ''),
+    }));
+
     console.log(`[UsageService] MongoDB aggregation result: ${aggregates.length} apps found (after filtering system apps)`);
 
     // If we have logs but aggregation returned 0, use fallback
@@ -203,7 +273,7 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
     const result = Array.from(grouped.entries())
       .map(([appId, data]) => ({
         appId,
-        appName: data.app.name,
+        appName: formatAppName(data.app.name, data.app.packageName),
         packageName: data.app.packageName,
         totalSeconds: data.totalSeconds,
         totalMinutes: data.totalSeconds / 60,
