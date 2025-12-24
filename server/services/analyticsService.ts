@@ -43,8 +43,26 @@ export const syncAnalytics = async (input: {
         continue;
       }
 
-      // Get or create app
-      const app = await findOrCreateApp(summary.appPackage, summary.appName);
+      // Get or create app (use upsert to handle race conditions)
+      // First try findOrCreateApp, but if it fails due to unique constraint, fetch existing
+      let app;
+      try {
+        app = await findOrCreateApp(summary.appPackage, summary.appName);
+      } catch (error: any) {
+        // Handle race condition: if app was created between check and create
+        if (error.code === 'P2002' && error.meta?.target?.includes('packageName')) {
+          // App already exists, fetch it
+          app = await prisma.app.findUnique({ where: { packageName: summary.appPackage } });
+          if (!app) {
+            console.error(`[AnalyticsService] Could not find app ${summary.appPackage} after constraint error`);
+            errors++;
+            continue;
+          }
+        } else {
+          // Re-throw other errors
+          throw error;
+        }
+      }
 
       // Parse date to Date object (in UTC, but date represents PH timezone day)
       const [year, month, day] = dateMatch.slice(1).map(Number);
