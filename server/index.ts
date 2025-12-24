@@ -65,9 +65,32 @@ corsConfig.origin =
   allowedOrigins.length === 0
     ? false
     : (origin, callback) => {
-      // Non-browser tools may send no Origin; allow those.
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      // Non-browser tools (Android apps, Postman, etc.) may send no Origin; always allow those.
+      if (!origin) {
+        console.log(`[CORS] Allowing request with no Origin header (likely mobile app or API tool)`);
+        return callback(null, true);
+      }
+
+      // Normalize origin (remove trailing slash)
+      const normalizedOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+
+      // Check exact match
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      // Check if any allowed origin matches (case-insensitive, handle protocol variations)
+      const originLower = normalizedOrigin.toLowerCase();
+      const matches = allowedOrigins.some(allowed => {
+        const allowedLower = allowed.toLowerCase();
+        const allowedNormalized = allowedLower.endsWith("/") ? allowedLower.slice(0, -1) : allowedLower;
+        return originLower === allowedNormalized;
+      });
+
+      if (matches) {
+        return callback(null, true);
+      }
+
       // Log rejected origin for debugging
       console.warn(`[CORS] Rejected origin: ${origin}. Allowed origins: ${allowedOrigins.join(", ")}`);
       return callback(new Error(`CORS origin not allowed: ${origin}`));
@@ -75,10 +98,12 @@ corsConfig.origin =
 
 // Log CORS configuration
 console.log("CORS Configuration:", {
+  NODE_ENV,
   CORS_ORIGIN: corsOrigin || "(not set - using safe defaults)",
   credentials: corsConfig.credentials,
   methods: corsConfig.methods,
-  allowedOrigins: allowedOrigins.length === 0 ? "(none)" : allowedOrigins,
+  allowedOrigins: allowedOrigins.length === 0 ? "(none - all non-browser requests allowed)" : allowedOrigins,
+  note: "Requests without Origin header (Android apps, API tools) are always allowed",
 });
 
 app.use(cors(corsConfig));
