@@ -89,7 +89,13 @@ const isSystemApp = (packageName: string): boolean => {
     lowerPkg.startsWith('com.google.android.setupwizard') ||
     lowerPkg.startsWith('com.google.android.inputmethod') || // Google Keyboard and other input methods
     lowerPkg.startsWith('com.google.android.apps.inputmethod') || // Google Input Tools
-    lowerPkg === 'com.google.android.permissioncontroller') { // Permission Controller
+    lowerPkg === 'com.google.android.permissioncontroller' || // Permission Controller
+    lowerPkg === 'com.google.android.packageinstaller') { // Package Installer
+    return true;
+  }
+
+  // Transsion apps (including store)
+  if (lowerPkg.startsWith('com.transsnet.') || lowerPkg.startsWith('com.transsion.')) {
     return true;
   }
 
