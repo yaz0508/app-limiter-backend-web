@@ -10,7 +10,18 @@ export const ingestUsageLog = async (input: {
   appName?: string;
   durationSeconds: number;
   occurredAt?: Date;
-}) => {
+}): Promise<any> => {
+  // Validate durationSeconds - must be positive and reasonable (max 24 hours = 86400 seconds)
+  let durationSeconds = Math.round(input.durationSeconds);
+  if (!durationSeconds || durationSeconds <= 0) {
+    throw new Error("Invalid durationSeconds: must be a positive number");
+  }
+  if (durationSeconds > 86400) {
+    console.warn(`[UsageService] Unusually large durationSeconds: ${durationSeconds}s (${Math.round(durationSeconds / 60)} minutes). Clamping to 24 hours.`);
+    // Clamp to 24 hours max
+    durationSeconds = 86400;
+  }
+
   const device = await findDeviceByIdentifier(input.deviceIdentifier);
   if (!device) {
     throw new Error("DeviceNotRegistered");
@@ -24,12 +35,12 @@ export const ingestUsageLog = async (input: {
       deviceId: device.id,
       appId: app.id,
       userId: device.userId,
-      durationSeconds: input.durationSeconds,
+      durationSeconds: durationSeconds,
       occurredAt: occurredAt,
     },
   });
 
-  console.log(`[UsageService] Ingested usage log: device=${device.id}, app=${app.packageName}, duration=${input.durationSeconds}s, occurredAt=${occurredAt.toISOString()}`);
+  console.log(`[UsageService] Ingested usage log: device=${device.id}, app=${app.packageName}, duration=${durationSeconds}s, occurredAt=${occurredAt.toISOString()}`);
 
   return log;
 };
@@ -222,13 +233,28 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
 
     let aggregates = result.cursor?.firstBatch ?? [];
 
-    // Filter out system apps
-    aggregates = aggregates.filter((item: any) => !isSystemApp(item.packageName || ''));
+    // Filter out system apps and invalid data
+    aggregates = aggregates.filter((item: any) => {
+      // Filter out system apps
+      if (isSystemApp(item.packageName || '')) {
+        return false;
+      }
+      // Filter out items with invalid or missing data
+      if (!item.totalSeconds || item.totalSeconds <= 0 || !item.sessions || item.sessions <= 0) {
+        console.warn(`[UsageService] Filtering out invalid aggregate:`, item);
+        return false;
+      }
+      return true;
+    });
 
     // Format app names to ensure readable names instead of package names
     aggregates = aggregates.map((item: any) => ({
       ...item,
       appName: formatAppName(item.appName, item.packageName || ''),
+      // Ensure totalSeconds and sessions are numbers
+      totalSeconds: Number(item.totalSeconds) || 0,
+      sessions: Number(item.sessions) || 0,
+      totalMinutes: Number(item.totalMinutes) || (Number(item.totalSeconds) || 0) / 60,
     }));
 
     console.log(`[UsageService] MongoDB aggregation result: ${aggregates.length} apps found (after filtering system apps)`);
@@ -256,11 +282,16 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
 
     console.log(`[UsageService] Fallback: Found ${logs.length} logs via Prisma`);
 
-    // Manual aggregation
+    // Manual aggregation - ensure we only count valid, positive durations
     const grouped = new Map<string, { totalSeconds: number; sessions: number; app: any }>();
     for (const log of logs) {
       if (!log.app) {
         console.warn(`[UsageService] Log ${log.id} has no app relation, skipping`);
+        continue;
+      }
+      // Skip logs with invalid or negative durations
+      if (!log.durationSeconds || log.durationSeconds <= 0) {
+        console.warn(`[UsageService] Log ${log.id} has invalid durationSeconds: ${log.durationSeconds}, skipping`);
         continue;
       }
       const key = log.appId;
@@ -275,11 +306,21 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
         appId,
         appName: formatAppName(data.app.name, data.app.packageName),
         packageName: data.app.packageName,
-        totalSeconds: data.totalSeconds,
-        totalMinutes: data.totalSeconds / 60,
-        sessions: data.sessions,
+        totalSeconds: Math.max(0, data.totalSeconds), // Ensure non-negative
+        totalMinutes: Math.max(0, data.totalSeconds) / 60,
+        sessions: Math.max(0, data.sessions), // Ensure non-negative
       }))
-      .filter(item => !isSystemApp(item.packageName)) // Filter out system apps
+      .filter(item => {
+        // Filter out system apps
+        if (isSystemApp(item.packageName)) {
+          return false;
+        }
+        // Filter out items with invalid data
+        if (!item.totalSeconds || item.totalSeconds <= 0 || !item.sessions || item.sessions <= 0) {
+          return false;
+        }
+        return true;
+      })
       .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
     console.log(`[UsageService] Fallback aggregation result: ${result.length} apps found (after filtering system apps)`);
@@ -353,14 +394,18 @@ export const getDailySummary = async (deviceId: string, dateISO?: string) => {
   }
 
   const aggregates = await aggregateUsage(deviceId, { start, end });
-  const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);
+  // Calculate total from filtered aggregates only (after system apps are filtered)
+  const totalSeconds = aggregates.reduce((acc, a) => {
+    const seconds = Number(a.totalSeconds) || 0;
+    return acc + Math.max(0, seconds); // Ensure non-negative
+  }, 0);
 
   console.log(`[UsageService] Aggregated ${aggregates.length} apps, totalSeconds: ${totalSeconds}`);
 
   // Always return data structure, even if empty
   return {
     date: start.toISOString(),
-    totalSeconds: totalSeconds || 0,
+    totalSeconds: Math.max(0, totalSeconds), // Ensure non-negative
     byApp: aggregates || []
   };
 };
@@ -391,12 +436,16 @@ export const getWeeklySummary = async (
     start: normalized,
     end,
   });
-  const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);
+  // Calculate total from filtered aggregates only (after system apps are filtered)
+  const totalSeconds = aggregates.reduce((acc, a) => {
+    const seconds = Number(a.totalSeconds) || 0;
+    return acc + Math.max(0, seconds); // Ensure non-negative
+  }, 0);
   // Always return data structure, even if empty
   return {
     start: normalized.toISOString(),
     end: end.toISOString(),
-    totalSeconds: totalSeconds || 0,
+    totalSeconds: Math.max(0, totalSeconds), // Ensure non-negative
     byApp: aggregates || [],
   };
 };
@@ -417,12 +466,16 @@ export const getCustomRangeSummary = async (
     start: normalizedStart,
     end: normalizedEnd,
   });
-  const totalSeconds = aggregates.reduce((acc, a) => acc + (a.totalSeconds ?? 0), 0);
+  // Calculate total from filtered aggregates only (after system apps are filtered)
+  const totalSeconds = aggregates.reduce((acc, a) => {
+    const seconds = Number(a.totalSeconds) || 0;
+    return acc + Math.max(0, seconds); // Ensure non-negative
+  }, 0);
   // Always return data structure, even if empty
   return {
     start: normalizedStart.toISOString(),
     end: normalizedEnd.toISOString(),
-    totalSeconds: totalSeconds || 0,
+    totalSeconds: Math.max(0, totalSeconds), // Ensure non-negative
     byApp: aggregates || [],
   };
 };

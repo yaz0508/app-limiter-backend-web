@@ -10,6 +10,7 @@
         "prisma:generate": "prisma generate",
         "prisma:push": "prisma db push",
         "seed:admin": "ts-node prisma/seed.ts",
+        "reset:db": "ts-node scripts/resetDatabase.ts",
         "lint": "tsc --noEmit"
     },
     "dependencies": {
