@@ -85,7 +85,8 @@ const isSystemApp = (packageName: string): boolean => {
     lowerPkg === 'com.coloros.gallery3d' ||
     lowerPkg === 'ai.character.app' ||
     lowerPkg === 'com.coloros.wirelesssettings' ||
-    lowerPkg === 'com.coloros.filemanager') {
+    lowerPkg === 'com.coloros.filemanager' ||
+    lowerPkg === 'com.sh.smart.caller') { // Smart Caller
     return true;
   }
 
