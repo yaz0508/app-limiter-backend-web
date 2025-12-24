@@ -81,12 +81,12 @@ export const listDevicesForRequester = async (
         orderBy: { createdAt: "desc" },
       });
 
-    // Get unique userIds and fetch users
-    const userIds = [...new Set(devices.map((d) => d.userId).filter(Boolean))];
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, email: true, name: true, role: true },
-    });
+      // Get unique userIds and fetch users
+      const userIds = [...new Set(devices.map((d) => d.userId).filter(Boolean))];
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, email: true, name: true, role: true },
+      });
 
       const userMap = new Map(users.map((u) => [u.id, u]));
 
