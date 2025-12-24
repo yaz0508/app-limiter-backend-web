@@ -59,7 +59,7 @@ const isSystemApp = (packageName: string): boolean => {
     lowerPkg === 'com.android.vending') { // Google Play Store
     return true;
   }
-  
+
   // App Limiter itself (don't track own usage)
   if (lowerPkg === 'com.example.applimiter') {
     return true;
