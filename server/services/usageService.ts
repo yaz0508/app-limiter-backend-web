@@ -57,8 +57,18 @@ const isSystemApp = (packageName: string): boolean => {
     lowerPkg.startsWith('com.xiaomi.') ||
     lowerPkg.startsWith('com.huawei.') ||
     lowerPkg.startsWith('com.oppo.') ||
+    lowerPkg.startsWith('com.coloros.') ||
     lowerPkg.startsWith('com.vivo.') ||
     lowerPkg.startsWith('com.oneplus.')) {
+    return true;
+  }
+
+  // Specific ColorOS and other system apps
+  if (lowerPkg === 'com.coloros.gesture' ||
+    lowerPkg === 'com.coloros.gallery3d' ||
+    lowerPkg === 'ai.character.app' ||
+    lowerPkg === 'com.coloros.wirelesssettings' ||
+    lowerPkg === 'com.coloros.filemanager') {
     return true;
   }
 
