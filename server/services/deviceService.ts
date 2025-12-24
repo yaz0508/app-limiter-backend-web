@@ -70,6 +70,80 @@ export const listDevicesForRequester = async (
   // Prisma will throw an error if we include a required relation that doesn't exist.
   // Solution: Query devices without user, then fetch users separately and map them.
   if (requester.role === Role.ADMIN) {
+    try {
+      const devices = await prisma.device.findMany({
+        where,
+        include: {
+          limits: {
+            include: { app: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+    // Get unique userIds and fetch users
+    const userIds = [...new Set(devices.map((d) => d.userId).filter(Boolean))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, email: true, name: true, role: true },
+    });
+
+      const userMap = new Map(users.map((u) => [u.id, u]));
+
+      // Map devices with users, filter out orphaned devices
+      // Also filter out limits with missing apps (orphaned limits)
+      return devices
+        .map((device) => ({
+          ...device,
+          user: userMap.get(device.userId) || null,
+          limits: device.limits.filter((limit) => limit.app !== null),
+        }))
+        .filter((device) => device.user !== null);
+    } catch (error: any) {
+      // Handle case where limits have orphaned app references
+      if (error.message?.includes("Field app is required")) {
+        console.warn("[DeviceService] Found orphaned limits, querying without app relation");
+        const devices = await prisma.device.findMany({
+          where,
+          include: {
+            limits: true, // Don't include app relation
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        // Fetch apps separately and filter out orphaned limits
+        const appIds = [...new Set(devices.flatMap((d) => d.limits.map((l) => l.appId)))];
+        const apps = await prisma.app.findMany({
+          where: { id: { in: appIds } },
+        });
+        const appMap = new Map(apps.map((a) => [a.id, a]));
+
+        const userIds = [...new Set(devices.map((d) => d.userId).filter(Boolean))];
+        const users = await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, email: true, name: true, role: true },
+        });
+        const userMap = new Map(users.map((u) => [u.id, u]));
+
+        return devices
+          .map((device) => ({
+            ...device,
+            user: userMap.get(device.userId) || null,
+            limits: device.limits
+              .filter((limit) => appMap.has(limit.appId))
+              .map((limit) => ({
+                ...limit,
+                app: appMap.get(limit.appId)!,
+              })),
+          }))
+          .filter((device) => device.user !== null);
+      }
+      throw error;
+    }
+  }
+
+  // For non-admins, user relation is not needed
+  try {
     const devices = await prisma.device.findMany({
       where,
       include: {
@@ -80,52 +154,103 @@ export const listDevicesForRequester = async (
       orderBy: { createdAt: "desc" },
     });
 
-    // Get unique userIds and fetch users
-    const userIds = [...new Set(devices.map((d) => d.userId).filter(Boolean))];
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, email: true, name: true, role: true },
-    });
+    // Filter out limits with missing apps (orphaned limits)
+    return devices.map((device) => ({
+      ...device,
+      limits: device.limits.filter((limit) => limit.app !== null),
+    }));
+  } catch (error: any) {
+    // Handle case where limits have orphaned app references
+    if (error.message?.includes("Field app is required")) {
+      console.warn("[DeviceService] Found orphaned limits, querying without app relation");
+      const devices = await prisma.device.findMany({
+        where,
+        include: {
+          limits: true, // Don't include app relation
+        },
+        orderBy: { createdAt: "desc" },
+      });
 
-    const userMap = new Map(users.map((u) => [u.id, u]));
+      // Fetch apps separately and filter out orphaned limits
+      const appIds = [...new Set(devices.flatMap((d) => d.limits.map((l) => l.appId)))];
+      const apps = await prisma.app.findMany({
+        where: { id: { in: appIds } },
+      });
+      const appMap = new Map(apps.map((a) => [a.id, a]));
 
-    // Map devices with users, filter out orphaned devices
-    return devices
-      .map((device) => ({
+      return devices.map((device) => ({
         ...device,
-        user: userMap.get(device.userId) || null,
-      }))
-      .filter((device) => device.user !== null);
+        limits: device.limits
+          .filter((limit) => appMap.has(limit.appId))
+          .map((limit) => ({
+            ...limit,
+            app: appMap.get(limit.appId)!,
+          })),
+      }));
+    }
+    throw error;
   }
-
-  // For non-admins, user relation is not needed
-  return prisma.device.findMany({
-    where,
-    include: {
-      limits: {
-        include: { app: true },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
 };
 
 export const getDeviceForRequester = async (
   id: string,
   requester: Express.UserPayload
 ) => {
-  const device = await prisma.device.findUnique({
-    where: { id },
-    include: {
-      limits: { include: { app: true } },
-    },
-  });
+  try {
+    const device = await prisma.device.findUnique({
+      where: { id },
+      include: {
+        limits: {
+          include: { app: true },
+        },
+      },
+    });
 
-  if (!device) return null;
-  if (requester.role !== Role.ADMIN && device.userId !== requester.id) {
-    throw new Error("Forbidden");
+    if (!device) return null;
+    if (requester.role !== Role.ADMIN && device.userId !== requester.id) {
+      throw new Error("Forbidden");
+    }
+
+    // Filter out limits with missing apps (orphaned limits)
+    return {
+      ...device,
+      limits: device.limits.filter((limit) => limit.app !== null),
+    };
+  } catch (error: any) {
+    // Handle case where limits have orphaned app references
+    if (error.message?.includes("Field app is required")) {
+      console.warn("[DeviceService] Found orphaned limits, querying without app relation");
+      const device = await prisma.device.findUnique({
+        where: { id },
+        include: {
+          limits: true, // Don't include app relation
+        },
+      });
+
+      if (!device) return null;
+      if (requester.role !== Role.ADMIN && device.userId !== requester.id) {
+        throw new Error("Forbidden");
+      }
+
+      // Fetch apps separately and filter out orphaned limits
+      const appIds = device.limits.map((l) => l.appId);
+      const apps = await prisma.app.findMany({
+        where: { id: { in: appIds } },
+      });
+      const appMap = new Map(apps.map((a) => [a.id, a]));
+
+      return {
+        ...device,
+        limits: device.limits
+          .filter((limit) => appMap.has(limit.appId))
+          .map((limit) => ({
+            ...limit,
+            app: appMap.get(limit.appId)!,
+          })),
+      };
+    }
+    throw error;
   }
-  return device;
 };
 
 export const updateDevice = async (
