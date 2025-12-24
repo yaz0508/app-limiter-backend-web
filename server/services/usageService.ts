@@ -204,7 +204,18 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
       $group: {
         _id: "$appId",
         totalSeconds: { $sum: "$durationSeconds" },
-        sessions: { $sum: 1 },
+        // Only count as session if duration is <= 5 minutes (300 seconds)
+        // Aggregated analytics logs (daily totals) are typically much larger
+        // Raw session logs from UsageEventTrackerService are typically < 5 minutes
+        sessions: {
+          $sum: {
+            $cond: [
+              { $lte: ["$durationSeconds", 300] }, // <= 5 minutes = likely a real session
+              1, // Count as session
+              0  // Don't count aggregated logs as sessions
+            ]
+          }
+        },
         appName: { $first: "$app.name" },
         packageName: { $first: "$app.packageName" },
       },
@@ -254,10 +265,12 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
         return false;
       }
       // Filter out items with invalid or missing data
-      if (!item.totalSeconds || item.totalSeconds <= 0 || !item.sessions || item.sessions <= 0) {
-        console.warn(`[UsageService] Filtering out invalid aggregate:`, item);
+      // Note: sessions can be 0 if all logs are aggregated (daily totals), which is valid
+      if (!item.totalSeconds || item.totalSeconds <= 0) {
+        console.warn(`[UsageService] Filtering out invalid aggregate (no totalSeconds):`, item);
         return false;
       }
+      // Don't filter out items with 0 sessions - they might only have aggregated logs
       return true;
     });
 
@@ -311,7 +324,12 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
       const key = log.appId;
       const existing = grouped.get(key) || { totalSeconds: 0, sessions: 0, app: log.app };
       existing.totalSeconds += log.durationSeconds;
-      existing.sessions += 1;
+      // Only count as session if duration is <= 5 minutes (300 seconds)
+      // Aggregated analytics logs (daily totals) are typically much larger
+      // Raw session logs from UsageEventTrackerService are typically < 5 minutes
+      if (log.durationSeconds <= 300) {
+        existing.sessions += 1;
+      }
       grouped.set(key, existing);
     }
 
@@ -330,9 +348,11 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
           return false;
         }
         // Filter out items with invalid data
-        if (!item.totalSeconds || item.totalSeconds <= 0 || !item.sessions || item.sessions <= 0) {
+        // Note: sessions can be 0 if all logs are aggregated (daily totals), which is valid
+        if (!item.totalSeconds || item.totalSeconds <= 0) {
           return false;
         }
+        // Don't filter out items with 0 sessions - they might only have aggregated logs
         return true;
       })
       .sort((a, b) => b.totalSeconds - a.totalSeconds);

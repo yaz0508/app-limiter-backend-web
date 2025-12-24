@@ -76,7 +76,7 @@ export const syncAnalytics = async (input: {
       // This prevents duplicate entries from multiple syncs that would cause inflated totals
       const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
       const dayEnd = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
-      
+
       const existingLogs = await prisma.usageLog.findMany({
         where: {
           deviceId: device.id,
@@ -101,7 +101,7 @@ export const syncAnalytics = async (input: {
             occurredAt: date,
           },
         });
-        
+
         // Delete all other duplicate logs for this app/date/device
         if (existingLogs.length > 1) {
           const duplicateIds = existingLogs.slice(1).map(log => log.id);
