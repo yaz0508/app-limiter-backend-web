@@ -28,6 +28,7 @@ export const createDevice = async (
         data: {
           name: data.name ?? existing.name,
           os: data.os ?? existing.os,
+          lastSeenAt: new Date(),
         },
       });
     }
@@ -46,6 +47,7 @@ export const createDevice = async (
         name: data.name ?? existing.name,
         os: data.os ?? existing.os,
         userId: newOwnerId,
+        lastSeenAt: new Date(),
       },
     });
   }
@@ -56,6 +58,7 @@ export const createDevice = async (
       os: data.os,
       deviceIdentifier: data.deviceIdentifier,
       user: { connect: { id: ownerId } },
+      lastSeenAt: new Date(),
     },
   });
 };
@@ -307,6 +310,14 @@ export const findDeviceByIdentifier = async (deviceIdentifier: string) => {
   });
 
   if (!device) return null;
+
+  // Touch lastSeenAt for active devices (best-effort; don't block the request)
+  prisma.device
+    .update({
+      where: { id: device.id },
+      data: { lastSeenAt: new Date() },
+    })
+    .catch(() => {});
 
   // Fetch user separately to handle orphaned devices
   const user = await prisma.user.findUnique({

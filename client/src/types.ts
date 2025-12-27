@@ -15,6 +15,7 @@ export interface Device {
   userId: string;
   user?: User;
   limits?: Limit[];
+  lastSeenAt?: string | null;
 }
 
 export interface App {

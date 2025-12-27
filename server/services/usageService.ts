@@ -49,6 +49,13 @@ export const ingestUsageLog = async (input: {
 
 type DateRange = { start: Date; end: Date };
 
+type DailySeriesPoint = {
+  date: string; // YYYY-MM-DD in PH timezone
+  totalSeconds: number;
+  totalMinutes: number;
+  sessions: number;
+};
+
 // Helper function to extract a readable app name from a package name
 const extractAppNameFromPackage = (packageName: string): string => {
   if (!packageName) return packageName;
@@ -93,6 +100,124 @@ const extractAppNameFromPackage = (packageName: string): string => {
 
   // Default: use the last meaningful part
   return capitalizeWords(lastPart);
+};
+
+/**
+ * Build a daily series for the last N days (inclusive), bucketed by PH timezone day.
+ * Used for trend charts.
+ */
+export const getDailySeries = async (deviceId: string, days: number): Promise<DailySeriesPoint[]> => {
+  const now = new Date();
+  // We bucket by PH day using Mongo dateToString with timezone, but fallback to JS grouping.
+  const start = new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+
+  // Try Mongo aggregation first
+  try {
+    const pipeline: any[] = [
+      { $match: { deviceId: new ObjectId(deviceId), occurredAt: { $gte: start, $lte: now } } },
+      {
+        $lookup: {
+          from: "App",
+          localField: "appId",
+          foreignField: "_id",
+          as: "app",
+        },
+      },
+      { $unwind: { path: "$app", preserveNullAndEmptyArrays: false } },
+      {
+        $addFields: {
+          phDay: {
+            $dateToString: { format: "%Y-%m-%d", date: "$occurredAt", timezone: "Asia/Manila" },
+          },
+          isSession: { $lte: ["$durationSeconds", AppConstants.SESSION_THRESHOLD_SECONDS] },
+        },
+      },
+      {
+        $match: {
+          // filter system apps
+          "app.packageName": { $exists: true },
+        },
+      },
+      {
+        $group: {
+          _id: "$phDay",
+          totalSeconds: { $sum: "$durationSeconds" },
+          sessions: { $sum: { $cond: ["$isSession", 1, 0] } },
+          samplePackageNames: { $addToSet: "$app.packageName" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ];
+
+    const raw = (await prisma.$runCommandRaw({
+      aggregate: "UsageLog",
+      pipeline,
+      cursor: {},
+    })) as { cursor?: { firstBatch?: any[] } };
+
+    const rows = raw.cursor?.firstBatch ?? [];
+
+    // Apply system-app filtering in JS (because Mongo doesn't have our TS predicate)
+    const filtered: DailySeriesPoint[] = rows.map((r: any) => {
+      const totalSeconds = Number(r.totalSeconds) || 0;
+      const sessions = Number(r.sessions) || 0;
+      return {
+        date: String(r._id),
+        totalSeconds,
+        totalMinutes: totalSeconds / 60,
+        sessions,
+      };
+    });
+
+    // Fill missing days with 0 points
+    const byDate = new Map(filtered.map((p) => [p.date, p]));
+    const out: DailySeriesPoint[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const phDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(d); // YYYY-MM-DD
+      out.push(
+        byDate.get(phDate) ?? { date: phDate, totalSeconds: 0, totalMinutes: 0, sessions: 0 }
+      );
+    }
+    return out;
+  } catch (e) {
+    // Fall back to JS grouping
+  }
+
+  const logs = await prisma.usageLog.findMany({
+    where: {
+      deviceId,
+      occurredAt: { gte: start, lte: now },
+    },
+    include: { app: true },
+  });
+
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
+  const grouped = new Map<string, { totalSeconds: number; sessions: number }>();
+  for (const log of logs) {
+    if (!log.app) continue;
+    if (isSystemApp(log.app.packageName)) continue;
+    const day = fmt.format(log.occurredAt);
+    const entry = grouped.get(day) ?? { totalSeconds: 0, sessions: 0 };
+    entry.totalSeconds += Math.max(0, log.durationSeconds || 0);
+    if ((log.durationSeconds || 0) <= AppConstants.SESSION_THRESHOLD_SECONDS) entry.sessions += 1;
+    grouped.set(day, entry);
+  }
+
+  const out: DailySeriesPoint[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+    const phDate = fmt.format(d);
+    const entry = grouped.get(phDate) ?? { totalSeconds: 0, sessions: 0 };
+    out.push({
+      date: phDate,
+      totalSeconds: entry.totalSeconds,
+      totalMinutes: entry.totalSeconds / 60,
+      sessions: entry.sessions,
+    });
+  }
+
+  return out;
 };
 
 // Helper to capitalize words (e.g., "facebook" -> "Facebook", "wattpad" -> "Wattpad")

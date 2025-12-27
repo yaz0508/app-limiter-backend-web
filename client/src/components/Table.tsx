@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 
 type Props = {
-  headers: string[];
+  headers: ReactNode[];
   rows: ReactNode[][];
   emptyMessage?: string;
 };
@@ -14,8 +14,8 @@ const Table = ({ headers, rows, emptyMessage = "No data" }: Props) => {
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              {headers.map((h) => (
-                <th key={h} className="px-3 py-3 sm:px-4">
+              {headers.map((h, idx) => (
+                <th key={idx} className="px-3 py-3 sm:px-4">
                   {h}
                 </th>
               ))}

@@ -136,6 +136,14 @@ export const getCustomRangeUsage = (token: string, deviceId: string, start: stri
   return apiRequest<WeeklyUsageSummary>(`/usage/summary/range/${deviceId}${query}`, { token });
 };
 
+export const getDailySeries = (token: string, deviceId: string, days: number = 30) => {
+  const query = `?days=${encodeURIComponent(String(days))}`;
+  return apiRequest<{ deviceId: string; days: number; series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> }>(
+    `/usage/summary/daily-series/${deviceId}${query}`,
+    { token }
+  );
+};
+
 // Analytics API endpoints
 export const getDailyAnalytics = (token: string, deviceId: string) =>
   apiRequest<any>(`/analytics/daily/${deviceId}`, { token });

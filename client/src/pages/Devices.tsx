@@ -4,10 +4,19 @@ import Table from "../components/Table";
 import { TableSkeleton } from "../components/LoadingSkeleton";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { createDevice, deleteDevice, getDevices, getUsers, updateDevice } from "../lib/api";
+import { createDevice, deleteDevice, getDevices, getUsers, updateDevice, upsertLimit } from "../lib/api";
 import { Device, User } from "../types";
 import ReassignDeviceModal from "../components/ReassignDeviceModal";
 import { exportDevicesToCSV } from "../utils/export";
+
+type LimitTemplate = {
+  id: string;
+  name: string;
+  items: Array<{ appPackage: string; appName?: string; dailyLimitMinutes: number }>;
+  createdAt: string;
+};
+
+const TEMPLATES_KEY = "limit_templates_v1";
 
 const Devices = () => {
   const { token } = useAuth();
@@ -21,6 +30,12 @@ const Devices = () => {
   const [osFilter, setOsFilter] = useState<string>("all");
   const [reassigningDevice, setReassigningDevice] = useState<Device | null>(null);
   const [deletingDevice, setDeletingDevice] = useState<Device | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const [bulkReassignUserId, setBulkReassignUserId] = useState<string>("");
+  const [templates, setTemplates] = useState<LimitTemplate[]>([]);
+  const [templateName, setTemplateName] = useState("");
+  const [templateText, setTemplateText] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   const loadDevices = async () => {
     if (!token) return;
@@ -39,6 +54,104 @@ const Devices = () => {
   useEffect(() => {
     loadDevices();
   }, [token]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TEMPLATES_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as LimitTemplate[];
+      if (Array.isArray(parsed)) setTemplates(parsed);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const saveTemplates = (next: LimitTemplate[]) => {
+    setTemplates(next);
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(next));
+  };
+
+  const parseTemplateText = (text: string): LimitTemplate["items"] => {
+    // Format per line:
+    // packageName,minutes,optional app name
+    const lines = text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const items: LimitTemplate["items"] = [];
+    for (const line of lines) {
+      const parts = line.split(",").map((p) => p.trim());
+      const appPackage = parts[0];
+      const mins = Number(parts[1]);
+      const appName = parts.slice(2).join(",").trim() || undefined;
+      if (!appPackage || !Number.isFinite(mins)) continue;
+      items.push({ appPackage, dailyLimitMinutes: mins, appName });
+    }
+    return items;
+  };
+
+  const createTemplate = () => {
+    const name = templateName.trim();
+    if (!name) {
+      showToast("Template name is required", "error");
+      return;
+    }
+    const items = parseTemplateText(templateText);
+    if (items.length === 0) {
+      showToast("Template must contain at least 1 app line: package,minutes[,name]", "error");
+      return;
+    }
+    const tpl: LimitTemplate = {
+      id: crypto.randomUUID(),
+      name,
+      items,
+      createdAt: new Date().toISOString(),
+    };
+    saveTemplates([tpl, ...templates]);
+    setTemplateName("");
+    setTemplateText("");
+    showToast("Template saved", "success");
+  };
+
+  const deleteTemplate = (id: string) => {
+    if (!confirm("Delete this template?")) return;
+    const next = templates.filter((t) => t.id !== id);
+    saveTemplates(next);
+    if (selectedTemplateId === id) setSelectedTemplateId("");
+    showToast("Template deleted", "success");
+  };
+
+  const applyTemplateToSelectedDevices = async () => {
+    if (!token) return;
+    const deviceIds = selectedDeviceIds;
+    if (deviceIds.length === 0) {
+      showToast("Select at least 1 device", "error");
+      return;
+    }
+    const tpl = templates.find((t) => t.id === selectedTemplateId);
+    if (!tpl) {
+      showToast("Select a template", "error");
+      return;
+    }
+    if (!confirm(`Apply template "${tpl.name}" to ${deviceIds.length} device(s)?`)) return;
+
+    try {
+      for (const deviceId of deviceIds) {
+        for (const item of tpl.items) {
+          // eslint-disable-next-line no-await-in-loop
+          await upsertLimit(token, {
+            deviceId,
+            appPackage: item.appPackage,
+            appName: item.appName,
+            dailyLimitMinutes: item.dailyLimitMinutes,
+          });
+        }
+      }
+      showToast(`Applied "${tpl.name}" to ${deviceIds.length} device(s)`, "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -98,6 +211,78 @@ const Devices = () => {
     return filtered;
   }, [devices, searchQuery, osFilter]);
 
+  const selectedDeviceIds = useMemo(
+    () => Object.entries(selectedIds).filter(([, v]) => v).map(([id]) => id),
+    [selectedIds]
+  );
+
+  const allVisibleSelected =
+    filteredDevices.length > 0 && filteredDevices.every((d) => selectedIds[d.id]);
+
+  const toggleSelectAllVisible = () => {
+    const next: Record<string, boolean> = { ...selectedIds };
+    for (const d of filteredDevices) {
+      next[d.id] = !allVisibleSelected;
+    }
+    setSelectedIds(next);
+  };
+
+  const clearSelection = () => setSelectedIds({});
+
+  const bulkDelete = async () => {
+    if (!token) return;
+    const ids = selectedDeviceIds;
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} device(s)? This cannot be undone.`)) return;
+    try {
+      for (const id of ids) {
+        // eslint-disable-next-line no-await-in-loop
+        await deleteDevice(token, id);
+      }
+      showToast(`Deleted ${ids.length} device(s)`, "success");
+      clearSelection();
+      await loadDevices();
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    }
+  };
+
+  const bulkReassign = async () => {
+    if (!token) return;
+    const ids = selectedDeviceIds;
+    if (ids.length === 0) return;
+    if (!bulkReassignUserId) {
+      showToast("Select a user to reassign to", "error");
+      return;
+    }
+    try {
+      for (const id of ids) {
+        // eslint-disable-next-line no-await-in-loop
+        await updateDevice(token, id, { userId: bulkReassignUserId });
+      }
+      showToast(`Reassigned ${ids.length} device(s)`, "success");
+      clearSelection();
+      setBulkReassignUserId("");
+      await loadDevices();
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    }
+  };
+
+  const formatLastSeen = (iso?: string | null) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString();
+  };
+
+  const isActive = (iso?: string | null) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return false;
+    return Date.now() - d.getTime() <= 24 * 60 * 60 * 1000;
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -148,6 +333,153 @@ const Devices = () => {
         )}
       </div>
 
+      {/* Bulk actions */}
+      <div className="rounded-lg border bg-white p-3 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600">
+            Selected: <span className="font-semibold text-slate-900">{selectedDeviceIds.length}</span>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={bulkReassignUserId}
+              onChange={(e) => setBulkReassignUserId(e.target.value)}
+              className="rounded border px-3 py-2 text-sm"
+            >
+              <option value="">Reassign selected to…</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={bulkReassign}
+              disabled={selectedDeviceIds.length === 0 || !bulkReassignUserId}
+              className="rounded bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Bulk Reassign
+            </button>
+            <button
+              onClick={bulkDelete}
+              disabled={selectedDeviceIds.length === 0}
+              className="rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Bulk Delete
+            </button>
+            <button
+              onClick={clearSelection}
+              disabled={selectedDeviceIds.length === 0}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+            >
+              Clear selection
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Limit templates */}
+      <div className="rounded-lg border bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row">
+          <div className="flex-1">
+            <h2 className="text-base font-semibold text-slate-900">Limit templates</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Save a preset and apply it to multiple devices. One line per app:{" "}
+              <span className="font-mono">package,minutes[,name]</span>
+            </p>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium text-slate-700">Template name</label>
+                <input
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                  placeholder="e.g. School Day"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700">Apply to selected</label>
+                <div className="mt-1 flex gap-2">
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    className="w-full rounded border px-3 py-2 text-sm"
+                  >
+                    <option value="">Select template…</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.items.length} apps)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={applyTemplateToSelectedDevices}
+                    disabled={!selectedTemplateId || selectedDeviceIds.length === 0}
+                    className="rounded bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <label className="text-sm font-medium text-slate-700">Template items</label>
+              <textarea
+                value={templateText}
+                onChange={(e) => setTemplateText(e.target.value)}
+                className="mt-1 h-28 w-full rounded border px-3 py-2 font-mono text-xs"
+                placeholder={"com.facebook.katana,60,Facebook\ncom.supercell.clashofclans,30,Clash of Clans"}
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={createTemplate}
+                  className="rounded bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+                >
+                  Save template
+                </button>
+                <span className="text-xs text-slate-500">Templates are stored locally in this browser.</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full lg:w-96">
+            <h3 className="text-sm font-semibold text-slate-900">Saved templates</h3>
+            <div className="mt-2 space-y-2">
+              {templates.length === 0 && (
+                <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                  No templates yet.
+                </div>
+              )}
+              {templates.map((t) => (
+                <div key={t.id} className="rounded border border-slate-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{t.name}</div>
+                      <div className="text-xs text-slate-500">{t.items.length} apps</div>
+                    </div>
+                    <button
+                      onClick={() => deleteTemplate(t.id)}
+                      className="text-xs text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                  <div className="mt-2 max-h-20 overflow-auto text-xs text-slate-600">
+                    {t.items.slice(0, 5).map((it, idx) => (
+                      <div key={idx} className="font-mono">
+                        {it.appPackage} → {it.dailyLimitMinutes}m
+                      </div>
+                    ))}
+                    {t.items.length > 5 && <div className="text-xs text-slate-400">…</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Info banner about automatic registration */}
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
         <div className="flex items-start gap-3">
@@ -180,9 +512,44 @@ const Devices = () => {
             <TableSkeleton rows={5} cols={5} />
           ) : (
             <Table
-              headers={["Name", "User", "Identifier", "OS", ""]}
+              headers={[
+                <div key="sel" className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    aria-label="Select all visible devices"
+                  />
+                  <span>Select</span>
+                </div>,
+                "Name",
+                "Status",
+                "Last seen",
+                "User",
+                "Identifier",
+                "OS",
+                "",
+              ]}
               rows={filteredDevices.map((d) => [
+              <input
+                key="sel"
+                type="checkbox"
+                checked={!!selectedIds[d.id]}
+                onChange={() => setSelectedIds((prev) => ({ ...prev, [d.id]: !prev[d.id] }))}
+                aria-label={`Select device ${d.name}`}
+              />,
               d.name,
+              <span
+                key="status"
+                className={`rounded px-2 py-1 text-xs font-semibold ${
+                  isActive(d.lastSeenAt) ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {isActive(d.lastSeenAt) ? "Active" : "Inactive"}
+              </span>,
+              <span key="lastSeen" className="text-sm text-slate-600">
+                {formatLastSeen(d.lastSeenAt)}
+              </span>,
               d.user ? (
                 <Link
                   key="user"

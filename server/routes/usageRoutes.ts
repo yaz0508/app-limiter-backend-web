@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { customRangeSummary, dailySummary, ingest, weeklySummary } from "../controllers/usageController";
+import { customRangeSummary, dailySeries, dailySummary, ingest, weeklySummary } from "../controllers/usageController";
 import { authenticate, authorizeRoles } from "../middleware/authMiddleware";
 import { optionalAuthenticate } from "../middleware/optionalAuthMiddleware";
 import { validateRequest } from "../middleware/validateRequest";
@@ -84,6 +84,18 @@ router.get(
     })
   ),
   customRangeSummary
+);
+
+router.get(
+  "/summary/daily-series/:deviceId",
+  validateRequest(
+    z.object({
+      params: z.object({ deviceId: z.string() }),
+      query: z.object({ days: z.string().optional() }),
+      body: z.object({}).optional(),
+    })
+  ),
+  dailySeries
 );
 
 export const usageRouter = router;

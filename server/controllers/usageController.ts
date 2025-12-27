@@ -3,6 +3,7 @@ import { prisma } from "../prisma/client";
 import {
   ensureDeviceAccess,
   getCustomRangeSummary,
+  getDailySeries,
   getDailySummary,
   getWeeklySummary,
   ingestUsageLog,
@@ -97,6 +98,27 @@ export const customRangeSummary = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("[UsageController] Error in customRangeSummary:", error);
     res.status(500).json({ message: "Failed to get custom range summary" });
+  }
+};
+
+export const dailySeries = async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.params;
+    const { days } = req.query as { days?: string };
+    const device = await prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) return res.status(404).json({ message: "Device not found" });
+    ensureDeviceAccess(device.userId, req.user!);
+
+    const parsedDays = days ? Number(days) : 30;
+    const safeDays = Number.isFinite(parsedDays)
+      ? Math.min(365, Math.max(7, Math.floor(parsedDays)))
+      : 30;
+
+    const series = await getDailySeries(deviceId, safeDays);
+    res.json({ deviceId, days: safeDays, series });
+  } catch (error) {
+    console.error("[UsageController] Error in dailySeries:", error);
+    res.status(500).json({ message: "Failed to get daily series" });
   }
 };
 
