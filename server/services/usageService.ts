@@ -3,6 +3,8 @@ import { ObjectId } from "bson";
 import { prisma } from "../prisma/client";
 import { findOrCreateApp } from "./appService";
 import { findDeviceByIdentifier } from "./deviceService";
+import { AppConstants } from "../constants";
+import { isSystemApp } from "../utils/systemAppFilter";
 
 export const ingestUsageLog = async (input: {
   deviceIdentifier: string;
@@ -46,73 +48,6 @@ export const ingestUsageLog = async (input: {
 };
 
 type DateRange = { start: Date; end: Date };
-
-// Helper to check if a package is a system/OEM app that shouldn't be shown in analytics
-const isSystemApp = (packageName: string): boolean => {
-  const lowerPkg = packageName.toLowerCase();
-
-  // Android system apps
-  if (lowerPkg.startsWith('com.android.systemui') ||
-    lowerPkg.startsWith('com.android.settings') ||
-    lowerPkg === 'android' ||
-    lowerPkg.startsWith('android.') ||
-    lowerPkg === 'com.android.vending') { // Google Play Store
-    return true;
-  }
-
-  // App Limiter itself (don't track own usage)
-  if (lowerPkg === 'com.example.applimiter') {
-    return true;
-  }
-
-  // Common OEM system apps (Transsion, Samsung, Xiaomi, etc.)
-  // Check for Transsion apps (can be com.transsion.* or *.transsion)
-  if (lowerPkg.startsWith('com.transsion.') ||
-    lowerPkg.includes('.transsion') ||
-    lowerPkg.startsWith('com.samsung.android.') ||
-    lowerPkg.startsWith('com.miui.') ||
-    lowerPkg.startsWith('com.xiaomi.') ||
-    lowerPkg.startsWith('com.huawei.') ||
-    lowerPkg.startsWith('com.oppo.') ||
-    lowerPkg.startsWith('com.coloros.') ||
-    lowerPkg.startsWith('com.vivo.') ||
-    lowerPkg.startsWith('com.oneplus.')) {
-    return true;
-  }
-
-  // Specific ColorOS and other system apps
-  if (lowerPkg === 'com.coloros.gesture' ||
-    lowerPkg === 'com.coloros.gallery3d' ||
-    lowerPkg === 'ai.character.app' ||
-    lowerPkg === 'com.coloros.wirelesssettings' ||
-    lowerPkg === 'com.coloros.filemanager' ||
-    lowerPkg === 'com.sh.smart.caller') { // Smart Caller
-    return true;
-  }
-
-  // Google system services (but not user apps like Gmail, Maps)
-  if (lowerPkg.startsWith('com.google.android.gms') ||
-    lowerPkg.startsWith('com.google.android.apps.nexuslauncher') ||
-    lowerPkg.startsWith('com.google.android.setupwizard') ||
-    lowerPkg.startsWith('com.google.android.inputmethod') || // Google Keyboard and other input methods
-    lowerPkg.startsWith('com.google.android.apps.inputmethod') || // Google Input Tools
-    lowerPkg === 'com.google.android.permissioncontroller' || // Permission Controller
-    lowerPkg === 'com.google.android.packageinstaller') { // Package Installer
-    return true;
-  }
-
-  // Transsion apps (including store)
-  if (lowerPkg.startsWith('com.transsnet.') || lowerPkg.startsWith('com.transsion.')) {
-    return true;
-  }
-
-  // Input methods (keyboards) - system apps
-  if (lowerPkg.includes('inputmethod') || lowerPkg.includes('keyboard')) {
-    return true;
-  }
-
-  return false;
-};
 
 // Helper function to extract a readable app name from a package name
 const extractAppNameFromPackage = (packageName: string): string => {
@@ -210,7 +145,7 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
         sessions: {
           $sum: {
             $cond: [
-              { $lte: ["$durationSeconds", 300] }, // <= 5 minutes = likely a real session
+              { $lte: ["$durationSeconds", AppConstants.SESSION_THRESHOLD_SECONDS] }, // <= 5 minutes
               1, // Count as session
               0  // Don't count aggregated logs as sessions
             ]
@@ -327,7 +262,7 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
       // Only count as session if duration is <= 5 minutes (300 seconds)
       // Aggregated analytics logs (daily totals) are typically much larger
       // Raw session logs from UsageEventTrackerService are typically < 5 minutes
-      if (log.durationSeconds <= 300) {
+      if (log.durationSeconds <= AppConstants.SESSION_THRESHOLD_SECONDS) {
         existing.sessions += 1;
       }
       grouped.set(key, existing);

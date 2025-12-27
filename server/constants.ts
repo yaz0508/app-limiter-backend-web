@@ -1,0 +1,10 @@
+export const AppConstants = {
+  UNLIMITED_LIMIT_MINUTES: 999999,
+  MIN_LIMIT_MINUTES: 30,
+  MAX_LIMIT_MINUTES: 300, // 5 hours
+  LIMIT_STEP_MINUTES: 30,
+  SESSION_THRESHOLD_SECONDS: 300, // 5 minutes
+  MAX_DAILY_SECONDS: 86400, // 24 hours
+} as const;
+
+

@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
 import { authRouter } from "./routes/authRoutes";
 import { userRouter } from "./routes/userRoutes";
 import { deviceRouter } from "./routes/deviceRoutes";
@@ -139,6 +140,25 @@ app.use((req, res, next) => {
 });
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+// Basic rate limiting to protect auth endpoints from brute-force and reduce abuse.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: NODE_ENV === "production" ? 20 : 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Tighter limiter for login attempts.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: NODE_ENV === "production" ? 10 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api/auth", authLimiter);
+app.use("/api/auth/login", loginLimiter);
 
 app.use("/api/auth", authRouter);
 app.use("/api/users", userRouter);

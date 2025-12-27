@@ -189,7 +189,9 @@ const AppLimits = () => {
                 <label className="text-sm font-medium text-slate-700">Daily limit (minutes)</label>
                 <input
                   type="number"
-                  min={1}
+                  min={30}
+                  max={300}
+                  step={30}
                   className="mt-1 w-full rounded border px-3 py-2 text-sm focus:border-primary focus:outline-none"
                   value={form.dailyLimitMinutes}
                   onChange={(e) =>
@@ -197,6 +199,7 @@ const AppLimits = () => {
                   }
                   required
                 />
+                <p className="mt-1 text-xs text-slate-500">Max 5 hours (300 mins). Must be in 30-minute steps.</p>
               </div>
               <button className="w-full rounded bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
                 Save limit
