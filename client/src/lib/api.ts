@@ -1,4 +1,4 @@
-import { App, DailyUsageSummary, Device, Limit, User, WeeklyUsageSummary } from "../types";
+import { ActiveFocusSession, App, DailyUsageSummary, Device, FocusSession, Limit, User, WeeklyUsageSummary } from "../types";
 
 // Ensure API_URL ends with /api, but handle cases where it might already include it
 const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -186,5 +186,45 @@ export const deleteDevice = (token: string, deviceId: string) =>
 
 export const getDeviceApps = (token: string, deviceId: string) =>
   apiRequest<{ apps: App[] }>(`/apps/device/${deviceId}`, { token });
+
+// Sessions API
+export const getSessions = (token: string, deviceId: string) =>
+  apiRequest<{ sessions: FocusSession[] }>(`/sessions/device/${deviceId}`, { token });
+
+export const createSession = (
+  token: string,
+  payload: {
+    deviceId: string;
+    name: string;
+    durationMinutes: number;
+    apps: Array<{ packageName: string; appName?: string }>;
+  }
+) => apiRequest<{ session: FocusSession }>(`/sessions`, { token, method: "POST", body: payload });
+
+export const updateSession = (
+  token: string,
+  id: string,
+  payload: {
+    name?: string;
+    durationMinutes?: number;
+    apps?: Array<{ packageName: string; appName?: string }>;
+  }
+) => apiRequest<{ session: FocusSession }>(`/sessions/${id}`, { token, method: "PUT", body: payload });
+
+export const deleteSession = (token: string, id: string) =>
+  apiRequest<void>(`/sessions/${id}`, { token, method: "DELETE" });
+
+export const getActiveSession = (token: string, deviceId: string) =>
+  apiRequest<{ active: ActiveFocusSession | null }>(`/sessions/device/${deviceId}/active`, { token });
+
+export const startSession = (token: string, deviceId: string, sessionId: string) =>
+  apiRequest<{ active: ActiveFocusSession }>(`/sessions/device/${deviceId}/start`, {
+    token,
+    method: "POST",
+    body: { sessionId },
+  });
+
+export const stopSession = (token: string, deviceId: string) =>
+  apiRequest<void>(`/sessions/device/${deviceId}/stop`, { token, method: "POST" });
 
 

@@ -35,6 +35,8 @@ model Device {
   userId           String      @db.ObjectId
   limits           Limit[]
   usageLogs        UsageLog[]
+  focusSessions    FocusSession[]
+  activeFocusSession ActiveFocusSession?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
@@ -82,6 +84,42 @@ model UsageLog {
 
   @@index([deviceId, occurredAt])
   @@index([appId, occurredAt])
+}
+
+model FocusSession {
+  id             String           @id @map("_id") @default(auto()) @db.ObjectId
+  device         Device           @relation(fields: [deviceId], references: [id])
+  deviceId       String           @db.ObjectId
+  name           String
+  durationMinutes Int
+  apps           FocusSessionApp[]
+  activeInstances ActiveFocusSession[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([deviceId])
+}
+
+model FocusSessionApp {
+  id          String       @id @map("_id") @default(auto()) @db.ObjectId
+  session     FocusSession @relation(fields: [sessionId], references: [id])
+  sessionId   String       @db.ObjectId
+  packageName String
+  appName     String?
+
+  @@index([sessionId])
+}
+
+model ActiveFocusSession {
+  id         String       @id @map("_id") @default(auto()) @db.ObjectId
+  device     Device       @relation(fields: [deviceId], references: [id])
+  deviceId   String       @unique @db.ObjectId
+  session    FocusSession @relation(fields: [sessionId], references: [id])
+  sessionId  String       @db.ObjectId
+  startedAt  DateTime
+  endsAt     DateTime
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 }
 
 

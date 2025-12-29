@@ -3,11 +3,10 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const links = [
-  { to: "/", label: "Dashboard" },
-  { to: "/users", label: "Users" },
-  { to: "/devices", label: "Devices" },
-  { to: "/limits", label: "App Limits" },
-  { to: "/usage", label: "Usage" },
+  { to: "/", label: "Home/Dashboard" },
+  { to: "/sessions", label: "Sessions" },
+  { to: "/usage", label: "Analytics" },
+  { to: "/settings", label: "Settings" },
 ];
 
 const NavBar = () => {

@@ -11,6 +11,8 @@ import UsageAnalytics from "./pages/UsageAnalytics";
 import Users from "./pages/Users";
 import type { Role } from "./types";
 import UserDetail from "./pages/UserDetail";
+import SettingsHome from "./pages/SettingsHome";
+import Sessions from "./pages/Sessions";
 
 const App = () => {
   const { user } = useAuth();
@@ -25,11 +27,13 @@ const App = () => {
         <Route element={<ProtectedRoute allowed={["ADMIN" as Role]} />}>
           <Route element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
+            <Route path="sessions" element={<Sessions />} />
             <Route path="users" element={<Users />} />
             <Route path="users/:id" element={<UserDetail />} />
             <Route path="devices" element={<Devices />} />
             <Route path="limits" element={<AppLimits />} />
             <Route path="usage" element={<UsageAnalytics />} />
+            <Route path="settings" element={<SettingsHome />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFound />} />

@@ -54,4 +54,30 @@ export interface WeeklyUsageSummary {
   byApp: UsageAggregate[];
 }
 
+export interface FocusSessionApp {
+  id: string;
+  sessionId: string;
+  packageName: string;
+  appName?: string | null;
+}
+
+export interface FocusSession {
+  id: string;
+  deviceId: string;
+  name: string;
+  durationMinutes: number;
+  apps: FocusSessionApp[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActiveFocusSession {
+  id: string;
+  deviceId: string;
+  sessionId: string;
+  startedAt: string;
+  endsAt: string;
+  session: FocusSession;
+}
+
 
