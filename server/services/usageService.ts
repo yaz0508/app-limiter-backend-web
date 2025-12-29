@@ -248,7 +248,7 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
     },
     {
       $lookup: {
-        from: "App",
+        from: "app", // Prisma uses lowercase collection names
         localField: "appId",
         foreignField: "_id",
         as: "app",
@@ -317,6 +317,12 @@ const aggregateUsage = async (deviceId: string, range: DateRange) => {
     })) as { cursor?: { firstBatch?: any[] } };
 
     let aggregates = result.cursor?.firstBatch ?? [];
+    
+    // Debug: log raw results before filtering
+    if (aggregates.length === 0 && logCount > 0) {
+      console.log(`[UsageService] MongoDB aggregation returned ${aggregates.length} results before filtering (expected > 0)`);
+      console.log(`[UsageService] Pipeline used collection name: "app" (lowercase)`);
+    }
 
     // Filter out system apps and invalid data
     aggregates = aggregates.filter((item: any) => {

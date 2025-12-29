@@ -14,9 +14,7 @@ const Dashboard = () => {
   const { showToast } = useToast();
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>("");
-  const [compareDevice, setCompareDevice] = useState<string>("");
   const [summary, setSummary] = useState<WeeklyUsageSummary | null>(null);
-  const [compareSummary, setCompareSummary] = useState<WeeklyUsageSummary | null>(null);
   const [series, setSeries] = useState<Array<{ date: string; totalMinutes: number }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +27,6 @@ const Dashboard = () => {
       setDevices(resp.devices);
       if (resp.devices.length > 0) {
         setSelectedDevice(resp.devices[0].id);
-        setCompareDevice(resp.devices.length > 1 ? resp.devices[1].id : "");
       }
     };
     fetchDevices().catch((err) => setError((err as Error).message));
@@ -48,16 +45,6 @@ const Dashboard = () => {
           weekly = await getWeeklyUsage(token, selectedDevice);
         }
         setSummary(weekly);
-
-        // Comparison (optional)
-        if (compareDevice && compareDevice !== selectedDevice) {
-          const cmp = dateRange
-            ? await getCustomRangeUsage(token, compareDevice, dateRange.start, dateRange.end)
-            : await getWeeklyUsage(token, compareDevice);
-          setCompareSummary(cmp);
-        } else {
-          setCompareSummary(null);
-        }
 
         // Trend (daily series) - always last 30 PH days for the selected device
         const daily = await getDailySeries(token, selectedDevice, 30);
@@ -85,10 +72,6 @@ const Dashboard = () => {
     return Math.round(summary.totalSeconds / 60);
   }, [summary]);
 
-  const compareTotalMinutes = useMemo(() => {
-    if (!compareSummary) return null;
-    return Math.round(compareSummary.totalSeconds / 60);
-  }, [compareSummary]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -105,21 +88,6 @@ const Dashboard = () => {
                 {d.name} ({d.deviceIdentifier})
               </option>
             ))}
-          </select>
-          <select
-            value={compareDevice}
-            onChange={(e) => setCompareDevice(e.target.value)}
-            className="w-full rounded border px-3 py-2 text-sm sm:w-auto"
-            title="Compare device"
-          >
-            <option value="">Compare (optional)…</option>
-            {devices
-              .filter((d) => d.id !== selectedDevice)
-              .map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
           </select>
           <div className="flex items-center gap-2">
             <DateRangePicker
@@ -141,7 +109,7 @@ const Dashboard = () => {
 
       {error && <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         <StatCard label="Weekly total" value={`${totalMinutes} mins`} />
         <StatCard
           label="Tracked apps"
@@ -151,11 +119,6 @@ const Dashboard = () => {
         <StatCard
           label="Sessions"
           value={`${summary?.byApp.reduce((acc, item) => acc + item.sessions, 0) ?? 0}`}
-        />
-        <StatCard
-          label="Comparison total"
-          value={compareTotalMinutes == null ? "—" : `${compareTotalMinutes} mins`}
-          helper={compareSummary ? "Compare device" : "Select a device to compare"}
         />
       </div>
 
