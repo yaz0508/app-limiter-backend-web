@@ -13,6 +13,8 @@ import type { Role } from "./types";
 import UserDetail from "./pages/UserDetail";
 import SettingsHome from "./pages/SettingsHome";
 import Sessions from "./pages/Sessions";
+import Categories from "./pages/Categories";
+import OverrideRequests from "./pages/OverrideRequests";
 
 const App = () => {
   const { user } = useAuth();
@@ -33,6 +35,8 @@ const App = () => {
             <Route path="devices" element={<Devices />} />
             <Route path="limits" element={<AppLimits />} />
             <Route path="usage" element={<UsageAnalytics />} />
+            <Route path="categories" element={<Categories />} />
+            <Route path="overrides" element={<OverrideRequests />} />
             <Route path="settings" element={<SettingsHome />} />
           </Route>
         </Route>

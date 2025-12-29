@@ -1,0 +1,194 @@
+import { prisma } from "../prisma/client";
+
+export interface UsageInsight {
+  type: "pattern" | "trend" | "comparison" | "prediction";
+  title: string;
+  description: string;
+  severity: "info" | "warning" | "success";
+  data?: any;
+}
+
+export const getUsageInsights = async (deviceId: string, days: number = 30): Promise<UsageInsight[]> => {
+  const insights: UsageInsight[] = [];
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  // Get usage logs for the period
+  const logs = await prisma.usageLog.findMany({
+    where: {
+      deviceId,
+      occurredAt: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    include: {
+      app: true,
+    },
+    orderBy: {
+      occurredAt: "asc",
+    },
+  });
+
+  if (logs.length === 0) {
+    return insights;
+  }
+
+  // Group logs by app and day of week
+  const appUsageByDay: Record<string, Record<number, number>> = {};
+  const appTotalUsage: Record<string, number> = {};
+
+  for (const log of logs) {
+    const dayOfWeek = new Date(log.occurredAt).getDay(); // 0 = Sunday, 6 = Saturday
+    const appId = log.appId;
+    const minutes = log.durationSeconds / 60;
+
+    if (!appUsageByDay[appId]) {
+      appUsageByDay[appId] = {};
+      appTotalUsage[appId] = 0;
+    }
+
+    if (!appUsageByDay[appId][dayOfWeek]) {
+      appUsageByDay[appId][dayOfWeek] = 0;
+    }
+
+    appUsageByDay[appId][dayOfWeek] += minutes;
+    appTotalUsage[appId] += minutes;
+  }
+
+  // Pattern Detection: Weekend vs Weekday usage
+  for (const [appId, dayUsage] of Object.entries(appUsageByDay)) {
+    const weekendDays = [0, 6]; // Sunday, Saturday
+    const weekdayDays = [1, 2, 3, 4, 5]; // Monday to Friday
+
+    const weekendUsage = weekendDays.reduce((sum, day) => sum + (dayUsage[day] || 0), 0);
+    const weekdayUsage = weekdayDays.reduce((sum, day) => sum + (dayUsage[day] || 0), 0);
+    const weekendDaysCount = Math.max(1, Math.floor(days / 7) * 2);
+    const weekdayDaysCount = Math.max(1, days - weekendDaysCount);
+
+    const avgWeekendUsage = weekendUsage / weekendDaysCount;
+    const avgWeekdayUsage = weekdayUsage / weekdayDaysCount;
+
+    if (avgWeekendUsage > 0 && avgWeekdayUsage > 0) {
+      const diff = ((avgWeekendUsage - avgWeekdayUsage) / avgWeekdayUsage) * 100;
+      
+      if (Math.abs(diff) > 20) {
+        const app = logs.find(l => l.appId === appId)?.app;
+        if (app) {
+          insights.push({
+            type: "pattern",
+            title: "Weekend Usage Pattern",
+            description: `You use ${app.name} ${Math.abs(diff).toFixed(0)}% ${diff > 0 ? 'more' : 'less'} on weekends compared to weekdays.`,
+            severity: diff > 50 ? "warning" : "info",
+            data: {
+              appId,
+              appName: app.name,
+              weekendAvg: avgWeekendUsage.toFixed(1),
+              weekdayAvg: avgWeekdayUsage.toFixed(1),
+              difference: diff.toFixed(0),
+            },
+          });
+        }
+      }
+    }
+  }
+
+  // Trend Detection: Compare recent weeks
+  const weekCount = Math.floor(days / 7);
+  if (weekCount >= 2) {
+    const recentWeekStart = new Date();
+    recentWeekStart.setDate(recentWeekStart.getDate() - 7);
+    
+    const previousWeekStart = new Date();
+    previousWeekStart.setDate(previousWeekStart.getDate() - 14);
+    const previousWeekEnd = new Date();
+    previousWeekEnd.setDate(previousWeekEnd.getDate() - 7);
+
+    const recentLogs = logs.filter(l => l.occurredAt >= recentWeekStart);
+    const previousLogs = logs.filter(
+      l => l.occurredAt >= previousWeekStart && l.occurredAt < previousWeekEnd
+    );
+
+    const recentTotal = recentLogs.reduce((sum, l) => sum + l.durationSeconds, 0) / 60;
+    const previousTotal = previousLogs.reduce((sum, l) => sum + l.durationSeconds, 0) / 60;
+
+    if (previousTotal > 0) {
+      const trend = ((recentTotal - previousTotal) / previousTotal) * 100;
+      
+      if (Math.abs(trend) > 10) {
+        insights.push({
+          type: "trend",
+          title: "Usage Trend",
+          description: `Your total usage has ${trend > 0 ? 'increased' : 'decreased'} by ${Math.abs(trend).toFixed(0)}% compared to last week.`,
+          severity: trend < -20 ? "success" : trend > 20 ? "warning" : "info",
+          data: {
+            recentTotal: recentTotal.toFixed(1),
+            previousTotal: previousTotal.toFixed(1),
+            trend: trend.toFixed(0),
+          },
+        });
+      }
+    }
+  }
+
+  // Top App Comparison
+  const appUsageArray = Object.entries(appTotalUsage)
+    .map(([appId, minutes]) => ({
+      appId,
+      minutes,
+      app: logs.find(l => l.appId === appId)?.app,
+    }))
+    .filter(item => item.app)
+    .sort((a, b) => b.minutes - a.minutes);
+
+  if (appUsageArray.length > 0) {
+    const topApp = appUsageArray[0];
+    const totalUsage = appUsageArray.reduce((sum, item) => sum + item.minutes, 0);
+    const percentage = (topApp.minutes / totalUsage) * 100;
+
+    if (percentage > 30 && topApp.app) {
+      insights.push({
+        type: "comparison",
+        title: "Most Used App",
+        description: `${topApp.app.name} accounts for ${percentage.toFixed(0)}% of your total usage (${(topApp.minutes / 60).toFixed(1)} hours).`,
+        severity: percentage > 50 ? "warning" : "info",
+        data: {
+          appId: topApp.appId,
+          appName: topApp.app.name,
+          percentage: percentage.toFixed(0),
+          hours: (topApp.minutes / 60).toFixed(1),
+        },
+      });
+    }
+  }
+
+  // Prediction: Based on current week's usage
+  if (weekCount >= 1) {
+    const currentWeekStart = new Date();
+    currentWeekStart.setDate(currentWeekStart.getDate() - (new Date().getDay()));
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    const currentWeekLogs = logs.filter(l => l.occurredAt >= currentWeekStart);
+    const currentWeekTotal = currentWeekLogs.reduce((sum, l) => sum + l.durationSeconds, 0) / 60;
+    const daysInWeek = new Date().getDay() + 1; // Days elapsed this week
+    const projectedWeekly = (currentWeekTotal / daysInWeek) * 7;
+
+    if (projectedWeekly > 0) {
+      insights.push({
+        type: "prediction",
+        title: "Weekly Projection",
+        description: `Based on this week's usage so far, you're projected to use ${(projectedWeekly / 60).toFixed(1)} hours this week.`,
+        severity: projectedWeekly > 3000 ? "warning" : "info", // 50 hours
+        data: {
+          currentTotal: currentWeekTotal.toFixed(1),
+          projectedTotal: projectedWeekly.toFixed(1),
+          daysElapsed: daysInWeek,
+        },
+      });
+    }
+  }
+
+  return insights;
+};
+

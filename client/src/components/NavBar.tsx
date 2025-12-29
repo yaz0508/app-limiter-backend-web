@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const links = [
@@ -12,6 +12,7 @@ const links = [
 const NavBar = () => {
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <header className="border-b bg-white shadow-sm">
@@ -20,18 +21,21 @@ const NavBar = () => {
         
         {/* Desktop Navigation */}
         <nav className="hidden gap-4 text-sm font-medium text-slate-600 md:flex">
-          {links.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              className={({ isActive }) =>
-                `px-2 py-1 rounded ${isActive ? "text-primary" : "hover:text-primary"}`
-              }
-              end={link.to === "/"}
-            >
-              {link.label}
-            </NavLink>
-          ))}
+          {links.map((link) => {
+            const isActive = link.to === "/" 
+              ? location.pathname === "/"
+              : location.pathname.startsWith(link.to);
+            return (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                className={`px-2 py-1 rounded ${isActive ? "text-primary" : "hover:text-primary"}`}
+                end={link.to === "/"}
+              >
+                {link.label}
+              </NavLink>
+            );
+          })}
         </nav>
 
         {/* Desktop User Info */}
@@ -76,21 +80,24 @@ const NavBar = () => {
       {mobileMenuOpen && (
         <div className="border-t bg-white md:hidden">
           <nav className="flex flex-col px-4 py-3">
-            {links.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) =>
-                  `px-3 py-2 rounded text-sm font-medium ${
+            {links.map((link) => {
+              const isActive = link.to === "/" 
+                ? location.pathname === "/"
+                : location.pathname.startsWith(link.to);
+              return (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  className={`px-3 py-2 rounded text-sm font-medium ${
                     isActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50"
-                  }`
-                }
-                end={link.to === "/"}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {link.label}
-              </NavLink>
-            ))}
+                  }`}
+                  end={link.to === "/"}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.label}
+                </NavLink>
+              );
+            })}
             <div className="mt-3 border-t pt-3">
               <div className="px-3 py-2">
                 <div className="font-semibold text-slate-900">{user?.name}</div>

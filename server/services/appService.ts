@@ -1,4 +1,5 @@
 import { prisma } from "../prisma/client";
+import { isSystemApp } from "../utils/systemAppFilter";
 
 // Helper function to extract a readable app name from a package name
 const extractAppNameFromPackage = (packageName: string): string => {
@@ -114,11 +115,14 @@ export const getAppsUsedOnDevice = async (deviceId: string) => {
     },
   });
 
-  // Extract unique apps
+  // Extract unique apps and filter out system apps
   const uniqueApps = new Map<string, { id: string; name: string; packageName: string }>();
   for (const log of usageLogs) {
     if (log.app && !uniqueApps.has(log.app.id)) {
-      uniqueApps.set(log.app.id, log.app);
+      // Filter out system apps (same filtering as when adding limits)
+      if (!isSystemApp(log.app.packageName)) {
+        uniqueApps.set(log.app.id, log.app);
+      }
     }
   }
 

@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 const cards = [
   { to: "/devices", title: "Devices", desc: "Manage student devices and assignments" },
   { to: "/limits", title: "App Limits", desc: "Set daily app limits (max 5 hours)" },
+  { to: "/categories", title: "Categories", desc: "Group apps and set category limits" },
+  { to: "/overrides", title: "Override Requests", desc: "Review and approve limit extension requests" },
   { to: "/users", title: "Users", desc: "Manage accounts" },
 ];
 

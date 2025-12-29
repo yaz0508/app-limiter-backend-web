@@ -3,8 +3,8 @@ import Table from "../components/Table";
 import UsageChart from "../components/UsageChart";
 import DateRangePicker from "../components/DateRangePicker";
 import { useAuth } from "../context/AuthContext";
-import { getCustomRangeUsage, getDailyUsage, getDevices, getWeeklyUsage } from "../lib/api";
-import { DailyUsageSummary, Device, WeeklyUsageSummary } from "../types";
+import { getCustomRangeUsage, getDailyUsage, getDevices, getWeeklyUsage, getUsageInsights } from "../lib/api";
+import { DailyUsageSummary, Device, UsageInsight, WeeklyUsageSummary } from "../types";
 
 const UsageAnalytics = () => {
   const { token } = useAuth();
@@ -12,6 +12,7 @@ const UsageAnalytics = () => {
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [daily, setDaily] = useState<DailyUsageSummary | null>(null);
   const [weekly, setWeekly] = useState<WeeklyUsageSummary | null>(null);
+  const [insights, setInsights] = useState<UsageInsight[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
@@ -39,16 +40,18 @@ const UsageAnalytics = () => {
       setError(null);
       setLoading(true);
       try {
-        const [d, w] = await Promise.all([
+        const [d, w, insightsResp] = await Promise.all([
           getDailyUsage(token, selectedDevice),
           dateRange
             ? getCustomRangeUsage(token, selectedDevice, dateRange.start, dateRange.end)
             : getWeeklyUsage(token, selectedDevice),
+          getUsageInsights(token, selectedDevice, 30),
         ]);
         console.log("Daily summary:", d);
         console.log("Weekly summary:", w);
         setDaily(d);
         setWeekly(w);
+        setInsights(insightsResp.insights);
       } catch (err) {
         const errorMessage = (err as Error).message;
         setError(errorMessage);
@@ -189,6 +192,38 @@ const UsageAnalytics = () => {
               <div className="py-6 text-center text-slate-500">Loading weekly data...</div>
             )}
           </div>
+
+          {/* Usage Insights */}
+          {insights.length > 0 && (
+            <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
+              <h2 className="mb-4 text-base font-semibold text-slate-900 sm:text-lg">Usage Insights</h2>
+              <div className="space-y-3">
+                {insights.map((insight, idx) => {
+                  const severityColors = {
+                    info: "bg-blue-50 border-blue-200 text-blue-800",
+                    warning: "bg-yellow-50 border-yellow-200 text-yellow-800",
+                    success: "bg-green-50 border-green-200 text-green-800",
+                  };
+                  return (
+                    <div
+                      key={idx}
+                      className={`rounded-lg border p-3 ${severityColors[insight.severity]}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1">
+                          <div className="font-semibold">{insight.title}</div>
+                          <div className="mt-1 text-sm">{insight.description}</div>
+                        </div>
+                        <span className="rounded bg-white/50 px-2 py-1 text-xs font-medium">
+                          {insight.type}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { ActiveFocusSession, App, DailyUsageSummary, Device, FocusSession, Limit, User, WeeklyUsageSummary } from "../types";
+import { ActiveFocusSession, App, AppCategory, CategoryLimit, DailyUsageSummary, Device, FocusSession, Limit, OverrideRequest, OverrideStatus, UsageInsight, User, WeeklyUsageSummary } from "../types";
 
 // Ensure API_URL ends with /api, but handle cases where it might already include it
 const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -226,5 +226,69 @@ export const startSession = (token: string, deviceId: string, sessionId: string)
 
 export const stopSession = (token: string, deviceId: string) =>
   apiRequest<void>(`/sessions/device/${deviceId}/stop`, { token, method: "POST" });
+
+// Categories API
+export const getCategories = (token: string) =>
+  apiRequest<{ categories: AppCategory[] }>("/categories", { token });
+
+export const getCategory = (token: string, id: string) =>
+  apiRequest<{ category: AppCategory }>(`/categories/${id}`, { token });
+
+export const createCategory = (
+  token: string,
+  payload: { name: string; description?: string; appIds?: string[] }
+) => apiRequest<{ category: AppCategory }>("/categories", { token, method: "POST", body: payload });
+
+export const updateCategory = (
+  token: string,
+  id: string,
+  payload: { name?: string; description?: string; appIds?: string[] }
+) => apiRequest<{ category: AppCategory }>(`/categories/${id}`, { token, method: "PUT", body: payload });
+
+export const deleteCategory = (token: string, id: string) =>
+  apiRequest<void>(`/categories/${id}`, { token, method: "DELETE" });
+
+export const createCategoryLimit = (
+  token: string,
+  payload: { deviceId: string; categoryId: string; dailyLimitMinutes: number }
+) => apiRequest<{ limit: CategoryLimit }>("/categories/limits", { token, method: "POST", body: payload });
+
+export const getCategoryLimits = (token: string, deviceId: string) =>
+  apiRequest<{ limits: CategoryLimit[] }>(`/categories/limits/device/${deviceId}`, { token });
+
+export const deleteCategoryLimit = (token: string, deviceId: string, categoryId: string) =>
+  apiRequest<void>(`/categories/limits/device/${deviceId}/category/${categoryId}`, { token, method: "DELETE" });
+
+// Override Requests API
+export const getOverrideRequests = (token: string, filters?: { deviceId?: string; status?: OverrideStatus }) => {
+  const query = new URLSearchParams();
+  if (filters?.deviceId) query.append("deviceId", filters.deviceId);
+  if (filters?.status) query.append("status", filters.status);
+  const queryString = query.toString();
+  return apiRequest<{ requests: OverrideRequest[] }>(`/overrides${queryString ? `?${queryString}` : ""}`, { token });
+};
+
+export const getOverrideRequest = (token: string, id: string) =>
+  apiRequest<{ request: OverrideRequest }>(`/overrides/${id}`, { token });
+
+export const createOverrideRequest = (
+  token: string,
+  payload: { deviceId?: string; deviceIdentifier?: string; appId: string; requestedMinutes: number; reason?: string }
+) => apiRequest<{ request: OverrideRequest }>("/overrides", { token, method: "POST", body: payload });
+
+export const updateOverrideRequest = (
+  token: string,
+  id: string,
+  payload: { status: OverrideStatus; expiresAt?: string }
+) => apiRequest<{ request: OverrideRequest }>(`/overrides/${id}`, { token, method: "PUT", body: payload });
+
+export const getActiveOverrides = (token: string, deviceId: string) =>
+  apiRequest<{ overrides: OverrideRequest[] }>(`/overrides/device/${deviceId}/active`, { token });
+
+// Insights API
+export const getUsageInsights = (token: string, deviceId: string, days?: number) => {
+  const query = days ? `?days=${days}` : "";
+  return apiRequest<{ insights: UsageInsight[] }>(`/insights/device/${deviceId}${query}`, { token });
+};
 
 

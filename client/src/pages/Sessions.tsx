@@ -34,9 +34,12 @@ const Sessions = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({
     name: "",
-    durationMinutes: 60,
+    durationMinutes: 60, // Stored as minutes internally
     selectedPackages: new Set(),
   });
+  
+  // Convert minutes to hours for display
+  const durationHours = form.durationMinutes / 60;
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,14 +81,14 @@ const Sessions = () => {
 
   const resetForm = () => {
     setEditingId(null);
-    setForm({ name: "", durationMinutes: 60, selectedPackages: new Set() });
+    setForm({ name: "", durationMinutes: 60, selectedPackages: new Set() }); // 1 hour default
   };
 
   const beginEdit = (session: FocusSession) => {
     setEditingId(session.id);
     setForm({
       name: session.name,
-      durationMinutes: session.durationMinutes,
+      durationMinutes: session.durationMinutes, // Keep in minutes internally
       selectedPackages: new Set(session.apps.map((a) => a.packageName)),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -181,7 +184,7 @@ const Sessions = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 pb-20 sm:space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Sessions</h1>
@@ -248,7 +251,13 @@ const Sessions = () => {
                   <div className="text-xs text-slate-500">{isActive ? "ACTIVE" : ""}</div>
                 </div>,
                 `${s.apps.length}`,
-                `${s.durationMinutes} min`,
+                (() => {
+                  const hours = s.durationMinutes / 60;
+                  if (hours === 0.5) return '30 min';
+                  if (hours === 1) return '1.0 hour';
+                  if (hours % 1 === 0.5) return `${Math.floor(hours)}h 30m`;
+                  return `${hours} hours`;
+                })(),
                 <div key="actions" className="flex flex-wrap gap-2">
                   {!isActive ? (
                     <button
@@ -313,18 +322,21 @@ const Sessions = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-slate-700">Duration (minutes)</label>
+              <label className="text-sm font-medium text-slate-700">Duration (hours)</label>
               <input
                 type="number"
-                min={5}
-                max={360}
-                step={5}
+                min={0.5}
+                max={6}
+                step={0.5}
                 className="mt-1 w-full rounded border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                value={form.durationMinutes}
-                onChange={(e) => setForm((p) => ({ ...p, durationMinutes: Number(e.target.value) }))}
+                value={durationHours}
+                onChange={(e) => {
+                  const hours = Number(e.target.value);
+                  setForm((p) => ({ ...p, durationMinutes: Math.round(hours * 60) }));
+                }}
                 required
               />
-              <p className="mt-1 text-xs text-slate-500">5–360 minutes (matches Android defaults)</p>
+              <p className="mt-1 text-xs text-slate-500">30 minutes minimum, then 1 hour, 1.5 hours, etc. (30-minute intervals, max 6 hours)</p>
             </div>
 
             <div>

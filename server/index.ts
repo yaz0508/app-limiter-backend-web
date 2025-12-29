@@ -14,6 +14,9 @@ import { appRouter } from "./routes/appRoutes";
 import { analyticsRouter } from "./routes/analyticsRoutes";
 import { sessionRouter } from "./routes/sessionRoutes";
 import { mobileSessionRouter } from "./routes/mobileSessionRoutes";
+import categoryRouter from "./routes/categoryRoutes";
+import overrideRouter from "./routes/overrideRoutes";
+import insightsRouter from "./routes/insightsRoutes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 dotenv.config();
@@ -171,6 +174,9 @@ app.use("/api/apps", appRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/sessions", sessionRouter);
 app.use("/api/mobile/sessions", mobileSessionRouter);
+app.use("/api/categories", categoryRouter);
+app.use("/api/overrides", overrideRouter);
+app.use("/api/insights", insightsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

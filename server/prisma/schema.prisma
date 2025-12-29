@@ -13,44 +13,50 @@ enum Role {
 }
 
 model User {
-  id           String      @id @map("_id") @default(auto()) @db.ObjectId
-  email        String      @unique
-  passwordHash String
-  name         String
-  role         Role        @default(USER)
-  devices      Device[]
-  createdLimits Limit[]    @relation("UserCreatedLimits")
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  usageLogs    UsageLog[]  @relation("UserUsageLogs")
+  id                    String           @id @map("_id") @default(auto()) @db.ObjectId
+  email                 String           @unique
+  passwordHash          String
+  name                  String
+  role                  Role             @default(USER)
+  devices               Device[]
+  createdLimits         Limit[]          @relation("UserCreatedLimits")
+  createdCategoryLimits CategoryLimit[]  @relation("UserCreatedCategoryLimits")
+  approvedOverrides     OverrideRequest[] @relation("UserApprovedOverrides")
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  usageLogs             UsageLog[]       @relation("UserUsageLogs")
 }
 
 model Device {
-  id               String      @id @map("_id") @default(auto()) @db.ObjectId
+  id               String           @id @map("_id") @default(auto()) @db.ObjectId
   name             String
   os               String?
-  deviceIdentifier String      @unique
+  deviceIdentifier String           @unique
   lastSeenAt       DateTime?
-  user             User        @relation(fields: [userId], references: [id])
-  userId           String      @db.ObjectId
+  user             User             @relation(fields: [userId], references: [id])
+  userId           String           @db.ObjectId
   limits           Limit[]
+  categoryLimits   CategoryLimit[]
+  overrideRequests OverrideRequest[]
   usageLogs        UsageLog[]
   focusSessions    FocusSession[]
   activeFocusSession ActiveFocusSession?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@index([userId])
 }
 
 model App {
-  id          String      @id @map("_id") @default(auto()) @db.ObjectId
-  name        String
-  packageName String      @unique
-  limits      Limit[]
-  usageLogs   UsageLog[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id            String         @id @map("_id") @default(auto()) @db.ObjectId
+  name          String
+  packageName   String         @unique
+  limits        Limit[]
+  categoryApps  CategoryApp[]
+  overrideRequests OverrideRequest[]
+  usageLogs     UsageLog[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Limit {
@@ -120,6 +126,77 @@ model ActiveFocusSession {
   endsAt     DateTime
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
+}
+
+model AppCategory {
+  id          String        @id @map("_id") @default(auto()) @db.ObjectId
+  name        String        @unique // e.g., "Social Media", "Games", "Education"
+  description String?
+  apps        CategoryApp[]
+  limits      CategoryLimit[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([name])
+}
+
+model CategoryApp {
+  id          String      @id @map("_id") @default(auto()) @db.ObjectId
+  category    AppCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId  String      @db.ObjectId
+  app         App         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appId       String      @db.ObjectId
+  createdAt   DateTime    @default(now())
+
+  @@unique([categoryId, appId])
+  @@index([categoryId])
+  @@index([appId])
+}
+
+model CategoryLimit {
+  id                String      @id @map("_id") @default(auto()) @db.ObjectId
+  device            Device      @relation(fields: [deviceId], references: [id])
+  deviceId          String      @db.ObjectId
+  category          AppCategory @relation(fields: [categoryId], references: [id])
+  categoryId        String      @db.ObjectId
+  dailyLimitMinutes Int
+  createdBy         User        @relation("UserCreatedCategoryLimits", fields: [createdById], references: [id])
+  createdById       String      @db.ObjectId
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@unique([deviceId, categoryId])
+  @@index([deviceId])
+  @@index([categoryId])
+}
+
+enum OverrideStatus {
+  PENDING
+  APPROVED
+  DENIED
+  EXPIRED
+}
+
+model OverrideRequest {
+  id                String         @id @map("_id") @default(auto()) @db.ObjectId
+  device            Device         @relation(fields: [deviceId], references: [id])
+  deviceId          String         @db.ObjectId
+  app               App            @relation(fields: [appId], references: [id])
+  appId             String         @db.ObjectId
+  requestedMinutes  Int            // Additional minutes requested
+  reason            String?        // Student's reason for request
+  status            OverrideStatus @default(PENDING)
+  approvedBy        User?          @relation("UserApprovedOverrides", fields: [approvedById], references: [id])
+  approvedById      String?        @db.ObjectId
+  approvedAt        DateTime?
+  expiresAt         DateTime?      // When the override expires
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([deviceId])
+  @@index([appId])
+  @@index([status])
+  @@index([deviceId, status])
 }
 
 
