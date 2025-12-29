@@ -136,8 +136,6 @@ model AppCategory {
   limits      CategoryLimit[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
-
-  @@index([name])
 }
 
 model CategoryApp {
