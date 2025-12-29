@@ -7,8 +7,9 @@ import {
   getActiveForDevice,
   getActiveForDeviceIdentifier,
 } from "../controllers/overrideController";
-import { authenticate, optionalAuthenticate } from "../middleware/auth";
-import { validateRequest } from "../middleware/validation";
+import { authenticate } from "../middleware/authMiddleware";
+import { optionalAuthenticate } from "../middleware/optionalAuthMiddleware";
+import { validateRequest } from "../middleware/validateRequest";
 import { z } from "zod";
 import { OverrideStatus } from "@prisma/client";
 

@@ -9,8 +9,8 @@ import {
   getDeviceLimits,
   removeLimit,
 } from "../controllers/categoryController";
-import { authenticate } from "../middleware/auth";
-import { validateRequest } from "../middleware/validation";
+import { authenticate } from "../middleware/authMiddleware";
+import { validateRequest } from "../middleware/validateRequest";
 import { z } from "zod";
 
 const router = express.Router();
