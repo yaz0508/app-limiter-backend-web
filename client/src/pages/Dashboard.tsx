@@ -74,14 +74,18 @@ const Dashboard = () => {
 
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Overview</h1>
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      {/* Header Section */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-text-primary">Dashboard Overview</h1>
+          <p className="mt-1 text-sm text-text-secondary">Monitor device usage and analytics</p>
+        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <select
             value={selectedDevice}
             onChange={(e) => setSelectedDevice(e.target.value)}
-            className="w-full rounded border px-3 py-2 text-sm sm:w-auto"
+            className="select w-full sm:w-auto"
           >
             {devices.map((d) => (
               <option key={d.id} value={d.id}>
@@ -98,7 +102,7 @@ const Dashboard = () => {
             {dateRange && (
               <button
                 onClick={() => setDateRange(null)}
-                className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                className="btn btn-secondary btn-sm"
               >
                 Reset
               </button>
@@ -107,64 +111,96 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {error && <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {/* Error Alert */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-        <StatCard label="Weekly total" value={`${totalMinutes} mins`} />
+      {/* Stats Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard 
+          label="Weekly Total" 
+          value={`${totalMinutes} mins`}
+          icon={
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        />
         <StatCard
-          label="Tracked apps"
+          label="Tracked Apps"
           value={`${summary?.byApp.length ?? 0}`}
           helper="Apps reported in the selected window"
+          icon={
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          }
         />
         <StatCard
           label="Sessions"
           value={`${summary?.byApp.reduce((acc, item) => acc + item.sessions, 0) ?? 0}`}
+          icon={
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          }
         />
       </div>
 
-      <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">30-day trend</h2>
-          <span className="text-xs text-slate-500">PH timezone days</span>
+      {/* Trend Chart Card */}
+      <div className="card">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-text-primary">30-Day Trend</h2>
+            <p className="mt-1 text-xs text-text-secondary">Usage patterns over time</p>
+          </div>
+          <span className="badge badge-primary">PH Timezone</span>
         </div>
-        {loading && <div className="py-10 text-center text-slate-500">Loading trend…</div>}
+        {loading && <div className="py-16 text-center text-text-tertiary">Loading trend…</div>}
         {!loading && series.length > 0 && <TrendChart data={series} />}
         {!loading && series.length === 0 && (
-          <div className="py-10 text-center text-slate-500">No trend data yet.</div>
+          <div className="py-16 text-center text-text-tertiary">No trend data yet.</div>
         )}
       </div>
 
-      <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
-        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
-            {dateRange ? "Custom Range Usage" : "Weekly Usage"}
-          </h2>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+      {/* Usage Chart Card */}
+      <div className="card">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-text-primary">
+              {dateRange ? "Custom Range Usage" : "Weekly Usage"}
+            </h2>
             {summary && (
-              <span className="text-xs text-slate-500">
+              <p className="mt-1 text-xs text-text-secondary">
                 {new Date(summary.start).toLocaleDateString()} -{" "}
                 {new Date(summary.end).toLocaleDateString()}
-              </span>
-            )}
-            {summary && summary.byApp.length > 0 && (
-              <button
-                onClick={() => {
-                  exportUsageToCSV(summary);
-                  showToast("Usage data exported to CSV", "success");
-                }}
-                className="rounded border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Export CSV
-              </button>
+              </p>
             )}
           </div>
+          {summary && summary.byApp.length > 0 && (
+            <button
+              onClick={() => {
+                exportUsageToCSV(summary);
+                showToast("Usage data exported to CSV", "success");
+              }}
+              className="btn btn-secondary btn-sm"
+            >
+              <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
+          )}
         </div>
-        {loading && <div className="py-10 text-center text-slate-500">Loading usage...</div>}
+        {loading && <div className="py-16 text-center text-text-tertiary">Loading usage...</div>}
         {!loading && summary && summary.byApp.length > 0 && (
           <UsageChart data={summary.byApp.slice(0, 8)} />
         )}
         {!loading && summary && summary.byApp.length === 0 && (
-          <div className="py-10 text-center text-slate-500">No usage reported yet.</div>
+          <div className="py-16 text-center text-text-tertiary">No usage reported yet.</div>
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { ActiveFocusSession, App, AppCategory, CategoryLimit, DailyUsageSummary, Device, FocusSession, Limit, OverrideRequest, OverrideStatus, UsageInsight, User, WeeklyUsageSummary } from "../types";
+import { ActiveFocusSession, App, AppCategory, CategoryLimit, DailyUsageSummary, Device, FocusSession, GoalProgress, GoalStatus, GoalType, HourlyUsage, Limit, OverrideRequest, OverrideStatus, PeakUsageHour, UsageGoal, UsageInsight, User, WeeklyUsageSummary } from "../types";
 
 // Ensure API_URL ends with /api, but handle cases where it might already include it
 const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -289,6 +289,64 @@ export const getActiveOverrides = (token: string, deviceId: string) =>
 export const getUsageInsights = (token: string, deviceId: string, days?: number) => {
   const query = days ? `?days=${days}` : "";
   return apiRequest<{ insights: UsageInsight[] }>(`/insights/device/${deviceId}${query}`, { token });
+};
+
+// Goals API
+export const createGoal = (
+  token: string,
+  deviceId: string,
+  payload: {
+    type: GoalType;
+    targetMinutes: number;
+    appId?: string;
+    categoryId?: string;
+    name?: string;
+    endDate?: string;
+  }
+) => apiRequest<{ goal: UsageGoal }>(`/device/${deviceId}/goals`, { token, method: "POST", body: payload });
+
+export const getGoals = (token: string, deviceId: string, status?: GoalStatus) => {
+  const query = status ? `?status=${status}` : "";
+  return apiRequest<{ goals: UsageGoal[] }>(`/device/${deviceId}/goals${query}`, { token });
+};
+
+export const getGoalProgress = (token: string, goalId: string) =>
+  apiRequest<{ progress: GoalProgress }>(`/goals/${goalId}/progress`, { token });
+
+export const getAllGoalProgress = (token: string, deviceId: string) =>
+  apiRequest<{ progress: GoalProgress[] }>(`/device/${deviceId}/goals/progress`, { token });
+
+export const updateGoal = (
+  token: string,
+  goalId: string,
+  payload: {
+    targetMinutes?: number;
+    name?: string;
+    status?: GoalStatus;
+    endDate?: string | null;
+  }
+) => apiRequest<{ goal: UsageGoal }>(`/goals/${goalId}`, { token, method: "PATCH", body: payload });
+
+export const deleteGoal = (token: string, goalId: string) =>
+  apiRequest<void>(`/goals/${goalId}`, { token, method: "DELETE" });
+
+// Hourly Usage API
+export const getHourlyUsage = (token: string, deviceId: string, date?: string) => {
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  return apiRequest<{ date: string; hourly: HourlyUsage[] }>(`/hourly/device/${deviceId}/hourly${query}`, { token });
+};
+
+export const getDailyHourlyUsage = (token: string, deviceId: string, start: string, end: string) => {
+  const query = `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+  return apiRequest<{ dailyHourly: Array<{ date: string; hours: HourlyUsage[]; totalMinutes: number }> }>(
+    `/hourly/device/${deviceId}/hourly/range${query}`,
+    { token }
+  );
+};
+
+export const getPeakUsageHours = (token: string, deviceId: string, days?: number) => {
+  const query = days ? `?days=${days}` : "";
+  return apiRequest<{ peakHours: PeakUsageHour[] }>(`/hourly/device/${deviceId}/hourly/peak${query}`, { token });
 };
 
 

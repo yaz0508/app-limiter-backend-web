@@ -17,6 +17,8 @@ import { mobileSessionRouter } from "./routes/mobileSessionRoutes";
 import categoryRouter from "./routes/categoryRoutes";
 import overrideRouter from "./routes/overrideRoutes";
 import insightsRouter from "./routes/insightsRoutes";
+import { goalRouter } from "./routes/goalRoutes";
+import { hourlyUsageRouter } from "./routes/hourlyUsageRoutes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 dotenv.config();
@@ -177,6 +179,8 @@ app.use("/api/mobile/sessions", mobileSessionRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/overrides", overrideRouter);
 app.use("/api/insights", insightsRouter);
+app.use("/api", goalRouter);
+app.use("/api/hourly", hourlyUsageRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

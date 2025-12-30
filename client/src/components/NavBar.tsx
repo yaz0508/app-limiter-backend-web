@@ -15,12 +15,19 @@ const NavBar = () => {
   const location = useLocation();
 
   return (
-    <header className="border-b bg-white shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
-        <div className="text-base font-semibold text-primary sm:text-lg">Digital Wellbeing</div>
+    <header className="sticky top-0 z-50 border-b border-border bg-white/80 backdrop-blur-lg shadow-sm">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-600 to-primary-500 text-white shadow-md">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+          </div>
+          <div className="text-lg font-bold gradient-text sm:text-xl">Digital Wellbeing</div>
+        </div>
         
         {/* Desktop Navigation */}
-        <nav className="hidden gap-4 text-sm font-medium text-slate-600 md:flex">
+        <nav className="hidden gap-1 text-sm font-medium md:flex">
           {links.map((link) => {
             const isActive = link.to === "/" 
               ? location.pathname === "/"
@@ -29,10 +36,17 @@ const NavBar = () => {
               <NavLink
                 key={link.to}
                 to={link.to}
-                className={`px-2 py-1 rounded ${isActive ? "text-primary" : "hover:text-primary"}`}
+                className={`relative px-4 py-2 rounded-lg transition-all duration-200 ${
+                  isActive 
+                    ? "bg-primary-50 text-primary-700 font-semibold" 
+                    : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
+                }`}
                 end={link.to === "/"}
               >
                 {link.label}
+                {isActive && (
+                  <span className="absolute bottom-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary-600" />
+                )}
               </NavLink>
             );
           })}
@@ -41,11 +55,11 @@ const NavBar = () => {
         {/* Desktop User Info */}
         <div className="hidden items-center gap-3 text-sm md:flex">
           <div className="text-right">
-            <div className="font-semibold">{user?.name}</div>
-            <div className="text-xs text-slate-500">{user?.role}</div>
+            <div className="font-semibold text-text-primary">{user?.name}</div>
+            <div className="text-xs text-text-secondary capitalize">{user?.role}</div>
           </div>
           <button
-            className="rounded bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+            className="btn btn-secondary btn-sm"
             onClick={logout}
           >
             Logout
@@ -78,7 +92,7 @@ const NavBar = () => {
 
       {/* Mobile Navigation Menu */}
       {mobileMenuOpen && (
-        <div className="border-t bg-white md:hidden">
+        <div className="border-t border-border bg-white md:hidden">
           <nav className="flex flex-col px-4 py-3">
             {links.map((link) => {
               const isActive = link.to === "/" 
@@ -88,8 +102,10 @@ const NavBar = () => {
                 <NavLink
                   key={link.to}
                   to={link.to}
-                  className={`px-3 py-2 rounded text-sm font-medium ${
-                    isActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50"
+                  className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive 
+                      ? "bg-primary-50 text-primary-700 font-semibold" 
+                      : "text-text-secondary hover:bg-surface-elevated"
                   }`}
                   end={link.to === "/"}
                   onClick={() => setMobileMenuOpen(false)}
@@ -98,13 +114,13 @@ const NavBar = () => {
                 </NavLink>
               );
             })}
-            <div className="mt-3 border-t pt-3">
+            <div className="mt-3 border-t border-border pt-3">
               <div className="px-3 py-2">
-                <div className="font-semibold text-slate-900">{user?.name}</div>
-                <div className="text-xs text-slate-500">{user?.role}</div>
+                <div className="font-semibold text-text-primary">{user?.name}</div>
+                <div className="text-xs text-text-secondary capitalize">{user?.role}</div>
               </div>
               <button
-                className="mt-2 w-full rounded bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+                className="btn btn-secondary btn-sm mt-2 w-full"
                 onClick={logout}
               >
                 Logout

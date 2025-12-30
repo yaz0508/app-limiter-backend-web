@@ -1,11 +1,20 @@
 import { prisma } from "../prisma/client";
+import { getAllGoalProgress } from "./goalService";
+
+export interface InsightAction {
+  label: string;
+  type: "set_limit" | "create_goal" | "create_session" | "view_details" | "view_analytics";
+  data?: any;
+}
 
 export interface UsageInsight {
-  type: "pattern" | "trend" | "comparison" | "prediction";
+  type: "pattern" | "trend" | "comparison" | "prediction" | "goal" | "habit" | "anomaly" | "recommendation";
   title: string;
   description: string;
   severity: "info" | "warning" | "success";
   data?: any;
+  action?: InsightAction;
+  confidence?: number; // 0-100
 }
 
 export const getUsageInsights = async (deviceId: string, days: number = 30): Promise<UsageInsight[]> => {
@@ -186,6 +195,90 @@ export const getUsageInsights = async (deviceId: string, days: number = 30): Pro
           daysElapsed: daysInWeek,
         },
       });
+    }
+  }
+
+  // Goal Progress Insights
+  try {
+    const goalProgress = await getAllGoalProgress(deviceId);
+    for (const progress of goalProgress) {
+      if (progress.percentage >= 80) {
+        // @ts-ignore - Prisma client will be regenerated on build
+        const goal = await prisma.usageGoal.findUnique({
+          where: { id: progress.goalId },
+          include: { app: true, category: true },
+        });
+
+        if (goal) {
+          insights.push({
+            type: "goal",
+            title: "Goal Progress",
+            description: progress.percentage >= 100
+              ? `You've exceeded your ${goal.name || goal.type.toLowerCase().replace('_', ' ')} goal by ${Math.round(progress.percentage - 100)}%.`
+              : `You've used ${Math.round(progress.percentage)}% of your ${goal.name || goal.type.toLowerCase().replace('_', ' ')} goal. ${Math.round(progress.remainingMinutes)} minutes remaining.`,
+            severity: progress.percentage >= 100 ? "warning" : progress.percentage >= 90 ? "warning" : "info",
+            data: {
+              goalId: progress.goalId,
+              currentMinutes: progress.currentMinutes,
+              targetMinutes: progress.targetMinutes,
+              percentage: progress.percentage,
+            },
+            action: {
+              label: "View Goal",
+              type: "view_details",
+              data: { goalId: progress.goalId },
+            },
+            confidence: 100,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[InsightsService] Error getting goal progress:", error);
+  }
+
+  // Recommendations based on usage patterns
+  if (appUsageArray.length > 0) {
+    const topApp = appUsageArray[0];
+    const totalUsage = appUsageArray.reduce((sum, item) => sum + item.minutes, 0);
+    const topAppPercentage = (topApp.minutes / totalUsage) * 100;
+
+    // Recommend setting a limit if app usage is high and no limit exists
+    if (topAppPercentage > 40 && topApp.app) {
+      try {
+        const hasLimit = await prisma.limit.findFirst({
+          where: {
+            deviceId: deviceId,
+            appId: topApp.appId,
+          },
+        });
+
+        if (!hasLimit) {
+          insights.push({
+            type: "recommendation",
+            title: "Consider Setting a Limit",
+            description: `${topApp.app.name} accounts for ${Math.round(topAppPercentage)}% of your usage. Consider setting a daily limit to help manage your time.`,
+            severity: "info",
+            data: {
+              appId: topApp.appId,
+              appName: topApp.app.name,
+              percentage: topAppPercentage,
+            },
+            action: {
+              label: "Set Limit",
+              type: "set_limit",
+              data: {
+                appId: topApp.appId,
+                appName: topApp.app.name,
+                packageName: topApp.app.packageName,
+              },
+            },
+            confidence: 75,
+          });
+        }
+      } catch (error) {
+        console.error("[InsightsService] Error checking limits:", error);
+      }
     }
   }
 

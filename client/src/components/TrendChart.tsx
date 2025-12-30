@@ -31,7 +31,7 @@ const TrendChart = ({ data }: Props) => {
           <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
           <YAxis width={40} />
           <Tooltip />
-          <Line type="monotone" dataKey="minutes" stroke="#2563eb" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="minutes" stroke="#6366F1" strokeWidth={3} dot={{ fill: "#6366F1", r: 4 }} activeDot={{ r: 6 }} />
         </LineChart>
       </ResponsiveContainer>
     </div>

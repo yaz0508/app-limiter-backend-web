@@ -22,6 +22,7 @@ model User {
   createdLimits         Limit[]          @relation("UserCreatedLimits")
   createdCategoryLimits CategoryLimit[]  @relation("UserCreatedCategoryLimits")
   approvedOverrides     OverrideRequest[] @relation("UserApprovedOverrides")
+  createdGoals          UsageGoal[]      @relation("UserCreatedGoals")
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
   usageLogs             UsageLog[]       @relation("UserUsageLogs")
@@ -41,6 +42,7 @@ model Device {
   usageLogs        UsageLog[]
   focusSessions    FocusSession[]
   activeFocusSession ActiveFocusSession?
+  goals            UsageGoal[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -55,6 +57,7 @@ model App {
   categoryApps  CategoryApp[]
   overrideRequests OverrideRequest[]
   usageLogs     UsageLog[]
+  goals         UsageGoal[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -134,6 +137,7 @@ model AppCategory {
   description String?
   apps        CategoryApp[]
   limits      CategoryLimit[]
+  goals       UsageGoal[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 }
@@ -195,6 +199,45 @@ model OverrideRequest {
   @@index([appId])
   @@index([status])
   @@index([deviceId, status])
+}
+
+enum GoalType {
+  DAILY_TOTAL
+  WEEKLY_TOTAL
+  APP_SPECIFIC
+  CATEGORY_SPECIFIC
+}
+
+enum GoalStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+model UsageGoal {
+  id                String      @id @map("_id") @default(auto()) @db.ObjectId
+  device            Device      @relation(fields: [deviceId], references: [id])
+  deviceId          String      @db.ObjectId
+  type              GoalType
+  targetMinutes     Int         // Target usage in minutes
+  app               App?        @relation(fields: [appId], references: [id])
+  appId             String?     @db.ObjectId
+  category          AppCategory? @relation(fields: [categoryId], references: [id])
+  categoryId        String?     @db.ObjectId
+  name              String?     // Custom goal name
+  status            GoalStatus @default(ACTIVE)
+  startDate         DateTime    @default(now())
+  endDate           DateTime?  // Optional end date
+  createdBy         User?      @relation("UserCreatedGoals", fields: [createdById], references: [id])
+  createdById       String?    @db.ObjectId
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([deviceId])
+  @@index([deviceId, status])
+  @@index([appId])
+  @@index([categoryId])
 }
 
 

@@ -13,9 +13,11 @@ const UsageAnalytics = () => {
   const [daily, setDaily] = useState<DailyUsageSummary | null>(null);
   const [weekly, setWeekly] = useState<WeeklyUsageSummary | null>(null);
   const [insights, setInsights] = useState<UsageInsight[]>([]);
+  const [hourly, setHourly] = useState<HourlyUsage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     const init = async () => {
@@ -40,18 +42,20 @@ const UsageAnalytics = () => {
       setError(null);
       setLoading(true);
       try {
-        const [d, w, insightsResp] = await Promise.all([
+        const [d, w, insightsResp, hourlyResp] = await Promise.all([
           getDailyUsage(token, selectedDevice),
           dateRange
             ? getCustomRangeUsage(token, selectedDevice, dateRange.start, dateRange.end)
             : getWeeklyUsage(token, selectedDevice),
           getUsageInsights(token, selectedDevice, 30),
+          getHourlyUsage(token, selectedDevice, selectedDate),
         ]);
         console.log("Daily summary:", d);
         console.log("Weekly summary:", w);
         setDaily(d);
         setWeekly(w);
         setInsights(insightsResp.insights);
+        setHourly(hourlyResp.hourly);
       } catch (err) {
         const errorMessage = (err as Error).message;
         setError(errorMessage);
@@ -59,6 +63,7 @@ const UsageAnalytics = () => {
         // Clear data on error
         setDaily(null);
         setWeekly(null);
+        setHourly([]);
       } finally {
         setLoading(false);
       }
@@ -73,7 +78,7 @@ const UsageAnalytics = () => {
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [token, selectedDevice, dateRange]);
+  }, [token, selectedDevice, dateRange, selectedDate]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -193,6 +198,29 @@ const UsageAnalytics = () => {
             )}
           </div>
 
+          {/* Hourly Usage Chart */}
+          <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Hourly Usage</h2>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="rounded border px-3 py-2 text-sm"
+              />
+            </div>
+            {hourly.length > 0 ? (
+              <HourlyUsageChart data={hourly} date={selectedDate} />
+            ) : (
+              <div className="py-6 text-center text-slate-500">
+                <p className="mb-2">No hourly data available.</p>
+                <p className="text-xs text-slate-400">
+                  Hourly usage data will appear here once usage is tracked.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Usage Insights */}
           {insights.length > 0 && (
             <div className="rounded-lg border bg-white p-3 shadow-sm sm:p-4">
@@ -213,10 +241,36 @@ const UsageAnalytics = () => {
                         <div className="flex-1">
                           <div className="font-semibold">{insight.title}</div>
                           <div className="mt-1 text-sm">{insight.description}</div>
+                          {insight.action && (
+                            <button
+                              onClick={() => {
+                                if (insight.action?.type === "set_limit") {
+                                  // Navigate to limits page or open limit dialog
+                                  window.location.href = `/devices?deviceId=${selectedDevice}&action=setLimit&appId=${insight.action.data?.appId}`;
+                                } else if (insight.action?.type === "view_details") {
+                                  // Navigate to goal details
+                                  window.location.href = `/goals?goalId=${insight.action.data?.goalId}`;
+                                } else if (insight.action?.type === "view_analytics") {
+                                  // Scroll to hourly chart or navigate
+                                  window.location.href = `/analytics?deviceId=${selectedDevice}&view=hourly`;
+                                }
+                              }}
+                              className="mt-2 rounded bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white"
+                            >
+                              {insight.action.label}
+                            </button>
+                          )}
                         </div>
-                        <span className="rounded bg-white/50 px-2 py-1 text-xs font-medium">
-                          {insight.type}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="rounded bg-white/50 px-2 py-1 text-xs font-medium">
+                            {insight.type}
+                          </span>
+                          {insight.confidence && (
+                            <span className="text-xs text-slate-500">
+                              {insight.confidence}% confidence
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

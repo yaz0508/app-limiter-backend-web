@@ -3,9 +3,9 @@ import NavBar from "../components/NavBar";
 
 const DashboardLayout = () => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-surface-elevated via-surface to-surface-elevated">
       <NavBar />
-      <main className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
+      <main className="pb-8">
         <Outlet />
       </main>
     </div>

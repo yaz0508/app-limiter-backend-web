@@ -131,12 +131,75 @@ export interface OverrideRequest {
   updatedAt: string;
 }
 
+export interface InsightAction {
+  label: string;
+  type: "set_limit" | "create_goal" | "create_session" | "view_details" | "view_analytics";
+  data?: any;
+}
+
 export interface UsageInsight {
-  type: "pattern" | "trend" | "comparison" | "prediction";
+  type: "pattern" | "trend" | "comparison" | "prediction" | "goal" | "habit" | "anomaly" | "recommendation";
   title: string;
   description: string;
   severity: "info" | "warning" | "success";
   data?: any;
+  action?: InsightAction;
+  confidence?: number;
+}
+
+export type GoalType = "DAILY_TOTAL" | "WEEKLY_TOTAL" | "APP_SPECIFIC" | "CATEGORY_SPECIFIC";
+export type GoalStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+
+export interface UsageGoal {
+  id: string;
+  deviceId: string;
+  type: GoalType;
+  targetMinutes: number;
+  appId?: string | null;
+  categoryId?: string | null;
+  name?: string | null;
+  status: GoalStatus;
+  startDate: string;
+  endDate?: string | null;
+  createdById?: string | null;
+  app?: App | null;
+  category?: AppCategory | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoalProgress {
+  goalId: string;
+  currentMinutes: number;
+  targetMinutes: number;
+  percentage: number;
+  remainingMinutes: number;
+  status: "on_track" | "at_risk" | "exceeded" | "completed";
+  daysRemaining?: number;
+}
+
+export interface HourlyUsage {
+  hour: number;
+  totalSeconds: number;
+  totalMinutes: number;
+  byApp: Array<{
+    appId: string;
+    appName: string;
+    packageName: string;
+    minutes: number;
+  }>;
+}
+
+export interface DailyHourlyUsage {
+  date: string;
+  hours: HourlyUsage[];
+  totalMinutes: number;
+}
+
+export interface PeakUsageHour {
+  hour: number;
+  totalMinutes: number;
+  averageMinutes: number;
 }
 
 

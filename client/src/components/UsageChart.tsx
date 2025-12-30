@@ -24,7 +24,7 @@ const UsageChart = ({ data }: Props) => {
           <XAxis dataKey="name" hide />
           <YAxis width={40} />
           <Tooltip />
-          <Bar dataKey="minutes" fill="#2563eb" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="minutes" fill="#6366F1" radius={[8, 8, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
