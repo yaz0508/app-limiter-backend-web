@@ -82,13 +82,13 @@ const UsageAnalytics = () => {
   }, [token, selectedDevice, dateRange, selectedDate]);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-7xl space-y-4 px-4 py-6 sm:space-y-6 sm:px-6 lg:px-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Usage Analytics</h1>
         <select
           value={selectedDevice}
           onChange={(e) => setSelectedDevice(e.target.value)}
-          className="w-full rounded border px-3 py-2 text-sm sm:w-auto"
+          className="w-full rounded border px-3 py-2 text-sm sm:w-auto sm:ml-auto"
         >
           {devices.map((d) => (
             <option key={d.id} value={d.id}>
