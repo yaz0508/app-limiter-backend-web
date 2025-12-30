@@ -3,8 +3,8 @@ import Table from "../components/Table";
 import UsageChart from "../components/UsageChart";
 import DateRangePicker from "../components/DateRangePicker";
 import { useAuth } from "../context/AuthContext";
-import { getCustomRangeUsage, getDailyUsage, getDevices, getWeeklyUsage, getUsageInsights } from "../lib/api";
-import { DailyUsageSummary, Device, UsageInsight, WeeklyUsageSummary } from "../types";
+import { getCustomRangeUsage, getDailyUsage, getDevices, getWeeklyUsage, getUsageInsights, getHourlyUsage } from "../lib/api";
+import { DailyUsageSummary, Device, HourlyUsage, UsageInsight, WeeklyUsageSummary } from "../types";
 
 const UsageAnalytics = () => {
   const { token } = useAuth();

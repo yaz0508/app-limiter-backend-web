@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma/client";
 import { ensureDeviceAccess } from "../services/usageService";
+import { getHourlyUsage, getDailyHourlyUsage, getPeakUsageHours } from "../services/hourlyUsageService";
 
-// Hourly usage service was removed - returning empty responses for now
 export const hourly = async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.params;
@@ -14,8 +14,8 @@ export const hourly = async (req: Request, res: Response) => {
     ensureDeviceAccess(device.userId, req.user!);
 
     const dateISO = date || new Date().toISOString().split('T')[0];
-    // Return empty hourly data - service was removed
-    res.json({ date: dateISO, hourly: [] });
+    const hourly = await getHourlyUsage(deviceId, dateISO);
+    res.json({ date: dateISO, hourly });
   } catch (error) {
     console.error("[HourlyUsageController] Error getting hourly usage:", error);
     res.status(500).json({ message: "Failed to get hourly usage" });
@@ -36,8 +36,8 @@ export const dailyHourly = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Both start and end dates are required" });
     }
 
-    // Return empty data - service was removed
-    res.json({ dailyHourly: [] });
+    const dailyHourly = await getDailyHourlyUsage(deviceId, start, end);
+    res.json({ dailyHourly });
   } catch (error) {
     console.error("[HourlyUsageController] Error getting daily hourly usage:", error);
     res.status(500).json({ message: "Failed to get daily hourly usage" });
@@ -54,8 +54,11 @@ export const peakHours = async (req: Request, res: Response) => {
     }
     ensureDeviceAccess(device.userId, req.user!);
 
-    // Return empty data - service was removed
-    res.json({ peakHours: [] });
+    const parsedDays = days ? parseInt(days, 10) : 7;
+    const safeDays = Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 7;
+    
+    const peakHours = await getPeakUsageHours(deviceId, safeDays);
+    res.json({ peakHours });
   } catch (error) {
     console.error("[HourlyUsageController] Error getting peak hours:", error);
     res.status(500).json({ message: "Failed to get peak hours" });
