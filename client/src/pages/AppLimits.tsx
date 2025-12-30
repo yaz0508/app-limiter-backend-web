@@ -97,8 +97,8 @@ const AppLimits = () => {
 
       {error && <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="order-2 lg:order-1 lg:col-span-2">
+      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="order-2 lg:order-1">
           <Table
             headers={["App", "Daily Limit (mins)", "Actions"]}
             rows={limits.map((limit) => [
@@ -118,8 +118,9 @@ const AppLimits = () => {
             emptyMessage="No limits yet"
           />
         </div>
-        <div className="order-1 rounded-lg border bg-white p-4 shadow-sm lg:order-2">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Add / Update Limit</h2>
+        <div className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start">
+          <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Add / Update Limit</h2>
           
           {!showManualEntry && deviceApps.length > 0 && (
             <div className="mt-3 space-y-2">
@@ -206,6 +207,7 @@ const AppLimits = () => {
               </button>
             </form>
           )}
+          </div>
         </div>
       </div>
     </div>

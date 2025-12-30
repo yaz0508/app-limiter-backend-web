@@ -239,8 +239,8 @@ const Sessions = () => {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="order-2 lg:order-1 lg:col-span-2">
+      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="order-2 lg:order-1">
           <Table
             headers={["Session", "Apps blocked", "Duration", "Actions"]}
             rows={sessions.map((s) => {
@@ -297,19 +297,20 @@ const Sessions = () => {
           />
         </div>
 
-        <div className="order-1 rounded-lg border bg-white p-4 shadow-sm lg:order-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
-              {editingId ? "Edit session" : "Create session"}
-            </h2>
-            {editingId && (
-              <button className="text-sm text-slate-600 hover:underline" onClick={resetForm}>
-                Cancel
-              </button>
-            )}
-          </div>
+        <div className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start">
+          <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+                {editingId ? "Edit session" : "Create session"}
+              </h2>
+              {editingId && (
+                <button className="text-sm text-slate-600 hover:underline" onClick={resetForm}>
+                  Cancel
+                </button>
+              )}
+            </div>
 
-          <form className="mt-3 space-y-3" onSubmit={handleSubmit}>
+            <form className="mt-3 space-y-3" onSubmit={handleSubmit}>
             <div>
               <label className="text-sm font-medium text-slate-700">Session name</label>
               <input
@@ -367,13 +368,14 @@ const Sessions = () => {
               </div>
             </div>
 
-            <button
-              className="w-full rounded bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
-              disabled={busy || !selectedDevice}
-            >
-              {busy ? "Saving..." : editingId ? "Save changes" : "Create session"}
-            </button>
-          </form>
+              <button
+                className="w-full rounded bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
+                disabled={busy || !selectedDevice}
+              >
+                {busy ? "Saving..." : editingId ? "Save changes" : "Create session"}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

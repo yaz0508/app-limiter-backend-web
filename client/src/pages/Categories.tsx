@@ -176,8 +176,8 @@ const Categories = () => {
 
       {error && <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="order-2 lg:order-1 lg:col-span-2">
+      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="order-2 lg:order-1">
           <Table
             headers={["Category", "Apps", "Limits", "Actions"]}
             rows={categories.map((cat) => [
@@ -206,10 +206,11 @@ const Categories = () => {
           />
         </div>
 
-        <div className="order-1 rounded-lg border bg-white p-4 shadow-sm lg:order-2">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
-            {editingId ? "Edit category" : "Create category"}
-          </h2>
+        <div className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start">
+          <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+              {editingId ? "Edit category" : "Create category"}
+            </h2>
           {editingId && (
             <button className="mt-1 text-sm text-slate-600 hover:underline" onClick={resetForm}>
               Cancel
@@ -270,6 +271,7 @@ const Categories = () => {
               {loading ? "Saving..." : editingId ? "Update category" : "Create category"}
             </button>
           </form>
+          </div>
         </div>
       </div>
 
@@ -290,8 +292,8 @@ const Categories = () => {
           </select>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <div>
             <Table
               headers={["Category", "Daily Limit", "Actions"]}
               rows={categoryLimits.map((limit) => [
@@ -309,8 +311,9 @@ const Categories = () => {
             />
           </div>
 
-          <div className="rounded-lg border bg-slate-50 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Set Category Limit</h3>
+          <div className="lg:sticky lg:top-4 lg:self-start">
+            <div className="rounded-lg border bg-slate-50 p-4">
+              <h3 className="text-sm font-semibold text-slate-900">Set Category Limit</h3>
             <form className="mt-3 space-y-3" onSubmit={handleLimitSubmit}>
               <div>
                 <label className="text-sm font-medium text-slate-700">Category</label>
@@ -351,6 +354,7 @@ const Categories = () => {
                 {loading ? "Saving..." : "Set limit"}
               </button>
             </form>
+            </div>
           </div>
         </div>
       </div>

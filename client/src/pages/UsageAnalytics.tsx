@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Table from "../components/Table";
 import UsageChart from "../components/UsageChart";
+import HourlyUsageChart from "../components/HourlyUsageChart";
 import DateRangePicker from "../components/DateRangePicker";
 import { useAuth } from "../context/AuthContext";
 import { getCustomRangeUsage, getDailyUsage, getDevices, getWeeklyUsage, getUsageInsights, getHourlyUsage } from "../lib/api";

@@ -292,8 +292,8 @@ const Devices = () => {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="order-2 lg:order-1 lg:col-span-2">
+      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="order-2 lg:order-1">
           {loading ? (
             <TableSkeleton rows={5} cols={5} />
           ) : (
@@ -380,8 +380,9 @@ const Devices = () => {
             />
           )}
         </div>
-        <div className="order-1 rounded-lg border bg-white p-4 shadow-sm lg:order-2">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Manually Add Device</h2>
+        <div className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start">
+          <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Manually Add Device</h2>
           <p className="mt-1 text-sm text-slate-500">
             Admin only: Manually register a device for testing or edge cases. Devices are normally
             registered automatically when users log in on the Android app.
@@ -419,6 +420,7 @@ const Devices = () => {
               Save device
             </button>
           </form>
+          </div>
         </div>
       </div>
 
