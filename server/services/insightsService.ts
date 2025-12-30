@@ -81,7 +81,7 @@ export const getUsageInsights = async (deviceId: string, days: number = 30): Pro
 
     if (avgWeekendUsage > 0 && avgWeekdayUsage > 0) {
       const diff = ((avgWeekendUsage - avgWeekdayUsage) / avgWeekdayUsage) * 100;
-      
+
       if (Math.abs(diff) > 20) {
         const app = logs.find(l => l.appId === appId)?.app;
         if (app) {
@@ -108,7 +108,7 @@ export const getUsageInsights = async (deviceId: string, days: number = 30): Pro
   if (weekCount >= 2) {
     const recentWeekStart = new Date();
     recentWeekStart.setDate(recentWeekStart.getDate() - 7);
-    
+
     const previousWeekStart = new Date();
     previousWeekStart.setDate(previousWeekStart.getDate() - 14);
     const previousWeekEnd = new Date();
@@ -124,7 +124,7 @@ export const getUsageInsights = async (deviceId: string, days: number = 30): Pro
 
     if (previousTotal > 0) {
       const trend = ((recentTotal - previousTotal) / previousTotal) * 100;
-      
+
       if (Math.abs(trend) > 10) {
         insights.push({
           type: "trend",

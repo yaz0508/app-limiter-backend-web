@@ -126,7 +126,7 @@ export const getGoalProgress = async (goalId: string): Promise<GoalProgress | nu
     currentMinutes = Math.round(weekly.totalSeconds / 60);
   } else if (goal.type === "APP_SPECIFIC" && goal.appId) {
     const daily = await getDailySummary(goal.deviceId);
-    const appUsage = daily.byApp.find((a: any) => a.appId === goal.appId);
+    const appUsage = daily.byApp.find((a: any) => a.appId === goal.appId) as any;
     currentMinutes = appUsage ? Math.round(appUsage.totalMinutes) : 0;
   } else if (goal.type === "CATEGORY_SPECIFIC" && goal.categoryId) {
     // For category goals, sum all apps in the category
