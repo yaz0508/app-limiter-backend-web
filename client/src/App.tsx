@@ -15,7 +15,6 @@ import SettingsHome from "./pages/SettingsHome";
 import Sessions from "./pages/Sessions";
 import Categories from "./pages/Categories";
 import OverrideRequests from "./pages/OverrideRequests";
-import Goals from "./pages/Goals";
 
 const App = () => {
   const { user } = useAuth();
@@ -38,7 +37,6 @@ const App = () => {
             <Route path="usage" element={<UsageAnalytics />} />
             <Route path="categories" element={<Categories />} />
             <Route path="overrides" element={<OverrideRequests />} />
-            <Route path="goals" element={<Goals />} />
             <Route path="settings" element={<SettingsHome />} />
           </Route>
         </Route>

@@ -173,7 +173,7 @@ const Devices = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="mx-auto max-w-7xl space-y-4 px-4 py-6 sm:space-y-6 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Devices</h1>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">

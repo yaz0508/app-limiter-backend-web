@@ -184,7 +184,7 @@ const Sessions = () => {
   };
 
   return (
-    <div className="space-y-4 pb-20 sm:space-y-6">
+    <div className="mx-auto max-w-7xl space-y-4 px-4 py-6 pb-20 sm:space-y-6 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Sessions</h1>

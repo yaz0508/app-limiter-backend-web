@@ -5,13 +5,12 @@ const cards = [
   { to: "/limits", title: "App Limits", desc: "Set daily app limits (max 5 hours)" },
   { to: "/categories", title: "Categories", desc: "Group apps and set category limits" },
   { to: "/overrides", title: "Override Requests", desc: "Review and approve limit extension requests" },
-  { to: "/goals", title: "Usage Goals", desc: "Set and track usage goals" },
   { to: "/users", title: "Users", desc: "Manage accounts" },
 ];
 
 const SettingsHome = () => {
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="mx-auto max-w-7xl space-y-4 px-4 py-6 sm:space-y-6 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Settings</h1>
       </div>
