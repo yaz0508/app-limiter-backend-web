@@ -120,15 +120,17 @@ model FocusSessionApp {
 }
 
 model ActiveFocusSession {
-  id         String       @id @map("_id") @default(auto()) @db.ObjectId
-  device     Device       @relation(fields: [deviceId], references: [id])
-  deviceId   String       @unique @db.ObjectId
-  session    FocusSession @relation(fields: [sessionId], references: [id])
-  sessionId  String       @db.ObjectId
-  startedAt  DateTime
-  endsAt     DateTime
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id            String       @id @map("_id") @default(auto()) @db.ObjectId
+  device        Device       @relation(fields: [deviceId], references: [id])
+  deviceId      String       @unique @db.ObjectId
+  session       FocusSession @relation(fields: [sessionId], references: [id])
+  sessionId     String       @db.ObjectId
+  startedAt     DateTime
+  endsAt        DateTime
+  pausedAt      DateTime?    // When the session was paused
+  pausedDurationMinutes Int  @default(0) // Total minutes paused so far
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 }
 
 model AppCategory {

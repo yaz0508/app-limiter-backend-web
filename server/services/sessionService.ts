@@ -96,12 +96,16 @@ export const startActiveSessionForDevice = async (deviceId: string, sessionId: s
       sessionId,
       startedAt,
       endsAt,
+      pausedAt: null,
+      pausedDurationMinutes: 0,
     },
     create: {
       deviceId,
       sessionId,
       startedAt,
       endsAt,
+      pausedAt: null,
+      pausedDurationMinutes: 0,
     },
     include: {
       session: { include: { apps: true } },
@@ -122,13 +126,76 @@ export const getActiveSessionForDevice = async (deviceId: string) => {
   });
   if (!active) return null;
 
+  // Calculate effective end time (original endsAt + paused duration)
+  const effectiveEndsAt = active.endsAt.getTime() + (active.pausedDurationMinutes * 60_000);
   const now = Date.now();
-  if (active.endsAt.getTime() <= now) {
+  
+  // If paused, don't check expiration (timer is stopped)
+  if (active.pausedAt) {
+    return active;
+  }
+  
+  // If not paused and expired, delete it
+  if (effectiveEndsAt <= now) {
     await prisma.activeFocusSession.deleteMany({ where: { deviceId } });
     return null;
   }
 
   return active;
+};
+
+export const pauseActiveSessionForDevice = async (deviceId: string) => {
+  const active = await prisma.activeFocusSession.findUnique({
+    where: { deviceId },
+  });
+  if (!active) return null;
+  
+  // If already paused, return as-is
+  if (active.pausedAt) return active;
+
+  const now = new Date();
+  await prisma.activeFocusSession.update({
+    where: { deviceId },
+    data: {
+      pausedAt: now,
+    },
+  });
+
+  return prisma.activeFocusSession.findUnique({
+    where: { deviceId },
+    include: { session: { include: { apps: true } } },
+  });
+};
+
+export const resumeActiveSessionForDevice = async (deviceId: string) => {
+  const active = await prisma.activeFocusSession.findUnique({
+    where: { deviceId },
+  });
+  if (!active) return null;
+  
+  // If not paused, return as-is
+  if (!active.pausedAt) return active;
+
+  const now = new Date();
+  const pausedDuration = Math.floor((now.getTime() - active.pausedAt.getTime()) / 60_000);
+  const totalPausedMinutes = active.pausedDurationMinutes + pausedDuration;
+  
+  // Extend endsAt by the paused duration
+  const newEndsAt = new Date(active.endsAt.getTime() + (pausedDuration * 60_000));
+
+  await prisma.activeFocusSession.update({
+    where: { deviceId },
+    data: {
+      pausedAt: null,
+      pausedDurationMinutes: totalPausedMinutes,
+      endsAt: newEndsAt,
+    },
+  });
+
+  return prisma.activeFocusSession.findUnique({
+    where: { deviceId },
+    include: { session: { include: { apps: true } } },
+  });
 };
 
 

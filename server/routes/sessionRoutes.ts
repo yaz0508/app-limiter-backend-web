@@ -11,6 +11,8 @@ import {
   start,
   stop,
   update,
+  pause,
+  resume,
 } from "../controllers/sessionController";
 
 const router = Router();
@@ -123,6 +125,30 @@ router.post(
     })
   ),
   stop
+);
+
+router.post(
+  "/device/:deviceId/pause",
+  validateRequest(
+    z.object({
+      params: z.object({ deviceId: z.string() }),
+      body: z.object({}).optional(),
+      query: z.object({}).optional(),
+    })
+  ),
+  pause
+);
+
+router.post(
+  "/device/:deviceId/resume",
+  validateRequest(
+    z.object({
+      params: z.object({ deviceId: z.string() }),
+      body: z.object({}).optional(),
+      query: z.object({}).optional(),
+    })
+  ),
+  resume
 );
 
 export const sessionRouter = router;

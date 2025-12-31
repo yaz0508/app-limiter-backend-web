@@ -9,6 +9,8 @@ import {
   startActiveSessionForDevice,
   stopActiveSessionForDevice,
   updateSession,
+  pauseActiveSessionForDevice,
+  resumeActiveSessionForDevice,
 } from "../services/sessionService";
 
 export const listForDevice = async (req: Request, res: Response) => {
@@ -118,6 +120,36 @@ export const stop = async (req: Request, res: Response) => {
     if (!device) return res.status(404).json({ message: "Device not found" });
     await stopActiveSessionForDevice(device.id);
     res.status(204).send();
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+export const pause = async (req: Request, res: Response) => {
+  const { deviceId } = req.params;
+  try {
+    const device = await getDeviceForRequester(deviceId, req.user!);
+    if (!device) return res.status(404).json({ message: "Device not found" });
+    const active = await pauseActiveSessionForDevice(device.id);
+    if (!active) return res.status(404).json({ message: "No active session found" });
+    res.json({ active });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+export const resume = async (req: Request, res: Response) => {
+  const { deviceId } = req.params;
+  try {
+    const device = await getDeviceForRequester(deviceId, req.user!);
+    if (!device) return res.status(404).json({ message: "Device not found" });
+    const active = await resumeActiveSessionForDevice(device.id);
+    if (!active) return res.status(404).json({ message: "No active session found" });
+    res.json({ active });
   } catch (err) {
     const msg = (err as Error).message;
     if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });

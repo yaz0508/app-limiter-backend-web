@@ -227,6 +227,12 @@ export const startSession = (token: string, deviceId: string, sessionId: string)
 export const stopSession = (token: string, deviceId: string) =>
   apiRequest<void>(`/sessions/device/${deviceId}/stop`, { token, method: "POST" });
 
+export const pauseSession = (token: string, deviceId: string) =>
+  apiRequest<{ active: ActiveFocusSession }>(`/sessions/device/${deviceId}/pause`, { token, method: "POST" });
+
+export const resumeSession = (token: string, deviceId: string) =>
+  apiRequest<{ active: ActiveFocusSession }>(`/sessions/device/${deviceId}/resume`, { token, method: "POST" });
+
 // Categories API
 export const getCategories = (token: string) =>
   apiRequest<{ categories: AppCategory[] }>("/categories", { token });

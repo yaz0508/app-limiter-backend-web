@@ -77,6 +77,51 @@ router.post(
   stopForDeviceIdentifier
 );
 
+router.post(
+  "/:deviceIdentifier",
+  validateRequest(
+    z.object({
+      params: z.object({ deviceIdentifier: z.string().min(3) }),
+      body: z.object({
+        name: z.string().min(1),
+        durationMinutes: z.number().int().min(5).max(360),
+        apps: z.array(
+          z.object({
+            packageName: z.string().min(1),
+            appName: z.string().optional(),
+          })
+        ).min(1),
+      }),
+      query: z.object({}).optional(),
+    })
+  ),
+  createForDeviceIdentifier
+);
+
+router.post(
+  "/:deviceIdentifier/pause",
+  validateRequest(
+    z.object({
+      params: z.object({ deviceIdentifier: z.string().min(3) }),
+      body: z.object({}).optional(),
+      query: z.object({}).optional(),
+    })
+  ),
+  pauseForDeviceIdentifier
+);
+
+router.post(
+  "/:deviceIdentifier/resume",
+  validateRequest(
+    z.object({
+      params: z.object({ deviceIdentifier: z.string().min(3) }),
+      body: z.object({}).optional(),
+      query: z.object({}).optional(),
+    })
+  ),
+  resumeForDeviceIdentifier
+);
+
 export const mobileSessionRouter = router;
 
 

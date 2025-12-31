@@ -5,6 +5,9 @@ import {
   listSessionsForDevice,
   startActiveSessionForDevice,
   stopActiveSessionForDevice,
+  createSession,
+  pauseActiveSessionForDevice,
+  resumeActiveSessionForDevice,
 } from "../services/sessionService";
 
 const ensureAccessIfJwtPresent = (deviceUserId: string, user?: Express.UserPayload) => {
@@ -76,6 +79,69 @@ export const stopForDeviceIdentifier = async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (err) {
     if ((err as Error).message === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+export const createForDeviceIdentifier = async (req: Request, res: Response) => {
+  const { name, durationMinutes, apps } = req.body as {
+    name: string;
+    durationMinutes: number;
+    apps: Array<{ packageName: string; appName?: string }>;
+  };
+  try {
+    const deviceIdentifier = req.params.deviceIdentifier;
+    const device = await findDeviceByIdentifier(deviceIdentifier);
+    if (!device) return res.status(400).json({ message: "Device not registered" });
+
+    ensureAccessIfJwtPresent(device.userId, req.user);
+
+    const session = await createSession({
+      deviceId: device.id,
+      name,
+      durationMinutes,
+      apps,
+    });
+    res.status(201).json({ session });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+export const pauseForDeviceIdentifier = async (req: Request, res: Response) => {
+  try {
+    const deviceIdentifier = req.params.deviceIdentifier;
+    const device = await findDeviceByIdentifier(deviceIdentifier);
+    if (!device) return res.status(400).json({ message: "Device not registered" });
+
+    ensureAccessIfJwtPresent(device.userId, req.user);
+
+    const active = await pauseActiveSessionForDevice(device.id);
+    if (!active) return res.status(404).json({ message: "No active session found" });
+    res.json({ active });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+export const resumeForDeviceIdentifier = async (req: Request, res: Response) => {
+  try {
+    const deviceIdentifier = req.params.deviceIdentifier;
+    const device = await findDeviceByIdentifier(deviceIdentifier);
+    if (!device) return res.status(400).json({ message: "Device not registered" });
+
+    ensureAccessIfJwtPresent(device.userId, req.user);
+
+    const active = await resumeActiveSessionForDevice(device.id);
+    if (!active) return res.status(404).json({ message: "No active session found" });
+    res.json({ active });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
     throw err;
   }
 };

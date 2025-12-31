@@ -77,6 +77,8 @@ export interface ActiveFocusSession {
   sessionId: string;
   startedAt: string;
   endsAt: string;
+  pausedAt?: string | null;
+  pausedDurationMinutes: number;
   session: FocusSession;
 }
 

@@ -11,6 +11,8 @@ import {
   startSession,
   stopSession,
   updateSession,
+  pauseSession,
+  resumeSession,
 } from "../lib/api";
 import type { App, Device, FocusSession } from "../types";
 
@@ -28,6 +30,7 @@ const Sessions = () => {
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeEndsAt, setActiveEndsAt] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   const [deviceApps, setDeviceApps] = useState<App[]>([]);
 
@@ -65,6 +68,7 @@ const Sessions = () => {
     setSessions(sResp.sessions);
     setActiveSessionId(aResp.active?.sessionId ?? null);
     setActiveEndsAt(aResp.active?.endsAt ?? null);
+    setIsPaused(!!aResp.active?.pausedAt);
     setDeviceApps(appsResp.apps);
   };
 
@@ -183,6 +187,34 @@ const Sessions = () => {
     }
   };
 
+  const handlePause = async () => {
+    if (!token) return;
+    setError(null);
+    try {
+      setBusy(true);
+      await pauseSession(token, selectedDevice);
+      await reload(selectedDevice);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!token) return;
+    setError(null);
+    try {
+      setBusy(true);
+      await resumeSession(token, selectedDevice);
+      await reload(selectedDevice);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-4 px-4 py-6 pb-20 sm:space-y-6 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -248,7 +280,9 @@ const Sessions = () => {
               return [
                 <div key="name">
                   <div className="font-semibold">{s.name}</div>
-                  <div className="text-xs text-slate-500">{isActive ? "ACTIVE" : ""}</div>
+                  <div className="text-xs text-slate-500">
+                    {isActive ? (isPaused ? "ACTIVE (PAUSED)" : "ACTIVE") : ""}
+                  </div>
                 </div>,
                 `${s.apps.length}`,
                 (() => {
@@ -268,13 +302,32 @@ const Sessions = () => {
                       Start
                     </button>
                   ) : (
-                    <button
-                      className="rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-                      onClick={handleStop}
-                      disabled={busy}
-                    >
-                      Stop
-                    </button>
+                    <>
+                      {isPaused ? (
+                        <button
+                          className="rounded bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                          onClick={handleResume}
+                          disabled={busy}
+                        >
+                          Resume
+                        </button>
+                      ) : (
+                        <button
+                          className="rounded bg-yellow-600 px-3 py-1 text-xs font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
+                          onClick={handlePause}
+                          disabled={busy}
+                        >
+                          Pause
+                        </button>
+                      )}
+                      <button
+                        className="rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                        onClick={handleStop}
+                        disabled={busy}
+                      >
+                        Stop
+                      </button>
+                    </>
                   )}
                   <button
                     className="rounded border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
