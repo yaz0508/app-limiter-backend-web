@@ -7,7 +7,7 @@ import {
   updateOverrideRequest,
   getDevices,
 } from "../lib/api";
-import type { Device, OverrideRequest, OverrideStatus } from "../types";
+import { Device, OverrideRequest, OverrideStatus } from "../types";
 
 const OverrideRequests = () => {
   const { token } = useAuth();
