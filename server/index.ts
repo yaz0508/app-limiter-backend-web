@@ -123,7 +123,7 @@ console.log(`   CORS_ORIGIN (env): ${corsOrigin || "(not set - using safe defaul
 console.log(`   CORS_ORIGIN (raw): ${JSON.stringify(corsOrigin)}`);
 console.log(`   Allowed origins (${allowedOrigins.length}):`, allowedOrigins.length > 0 ? allowedOrigins : "(none - all non-browser requests allowed)");
 console.log(`   Credentials: ${corsConfig.credentials}`);
-console.log(`   Methods: ${corsConfig.methods?.join(", ")}`);
+console.log(`   Methods: ${Array.isArray(corsConfig.methods) ? corsConfig.methods.join(", ") : corsConfig.methods || "N/A"}`);
 console.log(`   Note: Requests without Origin header (Android apps, API tools) are always allowed`);
 console.log("=".repeat(70));
 
