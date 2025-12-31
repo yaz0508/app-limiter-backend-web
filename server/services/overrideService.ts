@@ -53,8 +53,23 @@ export const updateOverrideRequest = async (
   if (input.status === OverrideStatus.APPROVED) {
     updateData.approvedById = input.approvedById;
     updateData.approvedAt = new Date();
+    
+    // If expiresAt is provided, use it; otherwise calculate from requestedMinutes
     if (input.expiresAt) {
       updateData.expiresAt = input.expiresAt;
+    } else {
+      // Get the request to find requestedMinutes
+      const existingRequest = await prisma.overrideRequest.findUnique({
+        where: { id },
+        select: { requestedMinutes: true },
+      });
+      
+      if (existingRequest) {
+        // Set expiration to requestedMinutes from now
+        const expiresAt = new Date();
+        expiresAt.setMinutes(expiresAt.getMinutes() + existingRequest.requestedMinutes);
+        updateData.expiresAt = expiresAt;
+      }
     }
   }
 
