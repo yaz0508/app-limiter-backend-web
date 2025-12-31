@@ -25,7 +25,7 @@ router.post(
         deviceId: z.string().optional(),
         deviceIdentifier: z.string().optional(),
         appId: z.string(),
-        requestedMinutes: z.number().min(15).max(240),
+        requestedMinutes: z.number().min(15).max(60),
         reason: z.string().optional(),
       }),
     })

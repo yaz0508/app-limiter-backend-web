@@ -7,6 +7,9 @@ import {
   listForDeviceIdentifier,
   startForDeviceIdentifier,
   stopForDeviceIdentifier,
+  createForDeviceIdentifier,
+  pauseForDeviceIdentifier,
+  resumeForDeviceIdentifier,
 } from "../controllers/mobileSessionController";
 
 const router = Router();
