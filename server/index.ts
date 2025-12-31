@@ -47,7 +47,10 @@ if (NODE_ENV === "production") {
   requireEnv("CORS_ORIGIN");
 }
 
-const corsOrigin = process.env.CORS_ORIGIN;
+// Get CORS_ORIGIN and clean it (remove quotes, trim whitespace)
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.trim().replace(/^["']|["']$/g, "") // Remove surrounding quotes
+  : undefined;
 
 // Configure CORS: explicit allowlist, no cookies (Bearer tokens).
 // If you later switch to cookie auth, re-enable credentials and DO NOT use "*" origins.
@@ -65,6 +68,7 @@ const allowedOrigins =
       .split(",")
       .map((o) => o.trim())
       .filter(Boolean)
+      .map((o) => o.endsWith("/") ? o.slice(0, -1) : o) // Normalize: remove trailing slashes
     : NODE_ENV === "production"
       ? []
       : defaultDevOrigins;
@@ -79,45 +83,49 @@ corsConfig.origin =
         return callback(null, true);
       }
 
-      // Normalize origin (remove trailing slash)
+      // Normalize origin (remove trailing slash, lowercase for comparison)
       const normalizedOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+      const originLower = normalizedOrigin.toLowerCase();
 
-      // Check exact match
+      // Check exact match (case-sensitive first for speed)
       if (allowedOrigins.includes(origin) || allowedOrigins.includes(normalizedOrigin)) {
-        console.log(`[CORS] Allowing origin: ${origin}`);
+        console.log(`[CORS] Allowing origin (exact match): ${origin}`);
         return callback(null, true);
       }
 
-      // Check if any allowed origin matches (case-insensitive, handle protocol variations)
-      const originLower = normalizedOrigin.toLowerCase();
+      // Check case-insensitive match
       const matches = allowedOrigins.some(allowed => {
-        const allowedLower = allowed.toLowerCase();
-        const allowedNormalized = allowedLower.endsWith("/") ? allowedLower.slice(0, -1) : allowedLower;
-        return originLower === allowedNormalized;
+        const allowedNormalized = allowed.endsWith("/") ? allowed.slice(0, -1) : allowed;
+        const allowedLower = allowedNormalized.toLowerCase();
+        return originLower === allowedLower;
       });
 
       if (matches) {
+        console.log(`[CORS] Allowing origin (case-insensitive match): ${origin}`);
         return callback(null, true);
       }
 
-      // Log rejected origin for debugging
-      console.warn(`[CORS] Rejected origin: ${origin}. Allowed origins: ${allowedOrigins.join(", ")}`);
-      console.warn(`[CORS] Normalized origin: ${normalizedOrigin}`);
-      console.warn(`[CORS] CORS_ORIGIN env: ${corsOrigin}`);
-      return callback(new Error(`CORS origin not allowed: ${origin}`));
+      // Log rejected origin for debugging with full details
+      console.error(`[CORS] ❌ REJECTED origin: ${origin}`);
+      console.error(`[CORS] Normalized: ${normalizedOrigin}`);
+      console.error(`[CORS] Lowercase: ${originLower}`);
+      console.error(`[CORS] Allowed origins (${allowedOrigins.length}):`, allowedOrigins);
+      console.error(`[CORS] CORS_ORIGIN env var:`, JSON.stringify(corsOrigin));
+      console.error(`[CORS] CORS_ORIGIN env var (raw):`, corsOrigin);
+      return callback(new Error(`CORS origin not allowed: ${origin}. Allowed: ${allowedOrigins.join(", ")}`));
     };
 
-// Log CORS configuration
-console.log("CORS Configuration:", {
-  NODE_ENV,
-  CORS_ORIGIN: corsOrigin || "(not set - using safe defaults)",
-  CORS_ORIGIN_RAW: JSON.stringify(corsOrigin),
-  credentials: corsConfig.credentials,
-  methods: corsConfig.methods,
-  allowedOrigins: allowedOrigins.length === 0 ? "(none - all non-browser requests allowed)" : allowedOrigins,
-  allowedOriginsCount: allowedOrigins.length,
-  note: "Requests without Origin header (Android apps, API tools) are always allowed",
-});
+// Log CORS configuration on startup for debugging
+console.log("=".repeat(70));
+console.log("🌐 CORS Configuration:");
+console.log(`   NODE_ENV: ${NODE_ENV}`);
+console.log(`   CORS_ORIGIN (env): ${corsOrigin || "(not set - using safe defaults)"}`);
+console.log(`   CORS_ORIGIN (raw): ${JSON.stringify(corsOrigin)}`);
+console.log(`   Allowed origins (${allowedOrigins.length}):`, allowedOrigins.length > 0 ? allowedOrigins : "(none - all non-browser requests allowed)");
+console.log(`   Credentials: ${corsConfig.credentials}`);
+console.log(`   Methods: ${corsConfig.methods?.join(", ")}`);
+console.log(`   Note: Requests without Origin header (Android apps, API tools) are always allowed`);
+console.log("=".repeat(70));
 
 // Apply CORS middleware
 app.use(cors(corsConfig));
@@ -147,6 +155,32 @@ app.use((req, res, next) => {
 });
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+// Debug endpoint to check CORS configuration (useful for troubleshooting)
+app.get("/debug/cors", (req, res) => {
+  const origin = req.headers.origin;
+  const normalizedOrigin = origin ? (origin.endsWith("/") ? origin.slice(0, -1) : origin) : null;
+  const originLower = normalizedOrigin?.toLowerCase();
+  
+  const isAllowed = origin ? allowedOrigins.some(allowed => {
+    const allowedNormalized = allowed.endsWith("/") ? allowed.slice(0, -1) : allowed;
+    return originLower === allowedNormalized.toLowerCase();
+  }) : true;
+
+  res.json({
+    requestOrigin: origin || "(no Origin header)",
+    normalizedOrigin: normalizedOrigin || "(no Origin header)",
+    originLower: originLower || "(no Origin header)",
+    corsOriginEnv: corsOrigin || "(not set)",
+    allowedOrigins,
+    allowedOriginsCount: allowedOrigins.length,
+    isAllowed,
+    nodeEnv: NODE_ENV,
+    message: isAllowed 
+      ? "✅ This origin is allowed" 
+      : `❌ This origin is NOT allowed. Add it to CORS_ORIGIN: ${origin || "N/A"}`,
+  });
+});
 
 // Basic rate limiting to protect auth endpoints from brute-force and reduce abuse.
 const authLimiter = rateLimit({

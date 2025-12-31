@@ -118,7 +118,24 @@ After you have your Vercel URL:
    ```
    CORS_ORIGIN=https://your-vercel-app.vercel.app,https://www.your-domain.com
    ```
-4. **Redeploy** the service (Render will auto-redeploy when env vars change)
+4. **Save** the environment variable
+5. **Redeploy** the service (Render will auto-redeploy when env vars change, or you can manually trigger a redeploy)
+
+### Current Configuration
+
+**Backend URL**: `https://app-limiter-backend-web-2.onrender.com`  
+**Frontend URL**: `https://app-limiter-admin-dashboard.vercel.app`
+
+**To fix CORS error, set in Render Environment Variables:**
+```
+CORS_ORIGIN=https://app-limiter-admin-dashboard.vercel.app
+```
+
+**Important Notes:**
+- Do NOT include trailing slashes in the CORS_ORIGIN
+- Do NOT include `/api` in the CORS_ORIGIN
+- The origin should match exactly what the browser sends (including `https://`)
+- After updating, wait for Render to redeploy (usually 1-2 minutes)
 
 ---
 
