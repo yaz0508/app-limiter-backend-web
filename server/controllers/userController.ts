@@ -75,25 +75,51 @@ export const update = async (req: Request, res: Response) => {
 
 export const updateMe = async (req: Request, res: Response) => {
   try {
+    // Ensure this is the /me route, not /:id
+    if (req.params.id && req.params.id !== "me") {
+      console.error("[updateMe] Route mismatch - params.id exists:", req.params.id);
+      return res.status(400).json({ message: "Invalid route - use /users/me to update your profile" });
+    }
+
     // Use the authenticated user's ID from JWT token
     if (!req.user || !req.user.id) {
+      console.error("[updateMe] User not authenticated:", { user: req.user });
       return res.status(401).json({ message: "Unauthorized - user not authenticated" });
     }
 
     const userId = req.user.id;
     
     if (!userId || userId.trim() === "") {
-      console.error("[updateMe] User ID is empty:", { userId, user: req.user });
+      console.error("[updateMe] User ID is empty:", { userId, user: req.user, email: req.user.email });
+      
+      // Fallback: try to get user by email if ID is missing
+      if (req.user.email) {
+        try {
+          const { prisma } = await import("../prisma/client");
+          const userByEmail = await prisma.user.findUnique({
+            where: { email: req.user.email },
+            select: { id: true },
+          });
+          if (userByEmail) {
+            console.log("[updateMe] Found user by email, using ID:", userByEmail.id);
+            const user = await updateUser(userByEmail.id, req.user, req.body);
+            return res.json({ user });
+          }
+        } catch (fallbackErr) {
+          console.error("[updateMe] Fallback failed:", fallbackErr);
+        }
+      }
+      
       return res.status(400).json({ message: "User id is required" });
     }
 
-    console.log("[updateMe] Updating user:", { userId, body: req.body });
+    console.log("[updateMe] Updating user:", { userId, email: req.user.email, body: req.body });
 
     const user = await updateUser(userId, req.user, req.body);
     res.json({ user });
   } catch (err) {
     const error = err as Error;
-    console.error("[updateMe] Error:", error);
+    console.error("[updateMe] Error:", error, { stack: error.stack });
     if (error.message === "Forbidden") {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -102,6 +128,11 @@ export const updateMe = async (req: Request, res: Response) => {
     }
     if ((err as any)?.code === "P2025") {
       return res.status(404).json({ message: "User not found" });
+    }
+    // Check for Prisma validation errors
+    if ((err as any)?.code === "P2003" || error.message.includes("Required")) {
+      console.error("[updateMe] Prisma validation error:", err);
+      return res.status(400).json({ message: "Invalid user data - please check your input" });
     }
     throw err;
   }
