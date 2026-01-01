@@ -73,6 +73,32 @@ export const update = async (req: Request, res: Response) => {
   }
 };
 
+export const updateMe = async (req: Request, res: Response) => {
+  try {
+    // Use the authenticated user's ID from JWT token
+    const userId = req.user!.id;
+    
+    if (!userId || userId.trim() === "") {
+      return res.status(400).json({ message: "User id is required" });
+    }
+
+    const user = await updateUser(userId, req.user!, req.body);
+    res.json({ user });
+  } catch (err) {
+    const error = err as Error;
+    if (error.message === "Forbidden") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    if (error.message === "User id is required" || error.message === "No updates provided") {
+      return res.status(400).json({ message: error.message });
+    }
+    if ((err as any)?.code === "P2025") {
+      return res.status(404).json({ message: "User not found" });
+    }
+    throw err;
+  }
+};
+
 export const remove = async (req: Request, res: Response) => {
   try {
     // Validate id parameter
