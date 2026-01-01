@@ -38,12 +38,13 @@ router.get(
 router.post("/", authorizeRoles(Role.ADMIN), validateRequest(userBaseSchema), create);
 
 // Update current user's profile (uses JWT token ID, no path parameter needed)
+// IMPORTANT: This route must come BEFORE /:id to avoid route matching conflicts
 router.put(
   "/me",
   authorizeRoles(Role.ADMIN, Role.USER),
   validateRequest(
     z.object({
-      params: z.object({}).optional(),
+      params: z.record(z.any()).optional(),
       body: z
         .object({
           email: z.string().email().optional(),
@@ -54,7 +55,7 @@ router.put(
         .refine((data) => Object.keys(data).length > 0, {
           message: "No updates provided",
         }),
-      query: z.object({}).optional(),
+      query: z.record(z.any()).optional(),
     })
   ),
   updateMe

@@ -76,16 +76,24 @@ export const update = async (req: Request, res: Response) => {
 export const updateMe = async (req: Request, res: Response) => {
   try {
     // Use the authenticated user's ID from JWT token
-    const userId = req.user!.id;
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized - user not authenticated" });
+    }
+
+    const userId = req.user.id;
     
     if (!userId || userId.trim() === "") {
+      console.error("[updateMe] User ID is empty:", { userId, user: req.user });
       return res.status(400).json({ message: "User id is required" });
     }
 
-    const user = await updateUser(userId, req.user!, req.body);
+    console.log("[updateMe] Updating user:", { userId, body: req.body });
+
+    const user = await updateUser(userId, req.user, req.body);
     res.json({ user });
   } catch (err) {
     const error = err as Error;
+    console.error("[updateMe] Error:", error);
     if (error.message === "Forbidden") {
       return res.status(403).json({ message: "Forbidden" });
     }
