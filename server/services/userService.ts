@@ -41,6 +41,11 @@ export const listUsers = async (requester: Express.UserPayload) => {
 };
 
 export const getUserById = async (id: string) => {
+    // Validate id is not empty
+    if (!id || id.trim() === "") {
+        throw new Error("User id is required");
+    }
+
     return prisma.user.findUnique({
         where: { id },
         select: { id: true, email: true, name: true, role: true, createdAt: true },
@@ -52,6 +57,11 @@ export const updateUser = async (
     requester: Express.UserPayload,
     data: Partial<Pick<User, "name" | "email" | "role">> & { password?: string }
 ) => {
+    // Validate id is not empty
+    if (!id || id.trim() === "") {
+        throw new Error("User id is required");
+    }
+
     if (requester.role !== Role.ADMIN && requester.id !== id) {
         throw new Error("Forbidden");
     }
@@ -62,6 +72,11 @@ export const updateUser = async (
     if (data.role && requester.role === Role.ADMIN) payload.role = data.role;
     if (data.password) payload.passwordHash = await hashPassword(data.password);
 
+    // Ensure at least one field is being updated
+    if (Object.keys(payload).length === 0) {
+        throw new Error("No updates provided");
+    }
+
     return prisma.user.update({
         where: { id },
         data: payload,
@@ -70,6 +85,11 @@ export const updateUser = async (
 };
 
 export const deleteUser = async (id: string, requester: Express.UserPayload) => {
+    // Validate id is not empty
+    if (!id || id.trim() === "") {
+        throw new Error("User id is required");
+    }
+
     if (requester.role !== Role.ADMIN) {
         throw new Error("Forbidden");
     }

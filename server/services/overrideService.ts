@@ -45,6 +45,11 @@ export const updateOverrideRequest = async (
   id: string,
   input: UpdateOverrideRequestInput
 ) => {
+  // Validate id is not empty
+  if (!id || id.trim() === "") {
+    throw new Error("Override request id is required");
+  }
+
   const updateData: any = {
     status: input.status,
     updatedAt: new Date(),
@@ -53,7 +58,7 @@ export const updateOverrideRequest = async (
   if (input.status === OverrideStatus.APPROVED) {
     updateData.approvedById = input.approvedById;
     updateData.approvedAt = new Date();
-    
+
     // If expiresAt is provided, use it; otherwise calculate from requestedMinutes
     if (input.expiresAt) {
       updateData.expiresAt = input.expiresAt;
@@ -63,7 +68,7 @@ export const updateOverrideRequest = async (
         where: { id },
         select: { requestedMinutes: true },
       });
-      
+
       if (existingRequest) {
         // Set expiration to requestedMinutes from now
         const expiresAt = new Date();
@@ -114,6 +119,11 @@ export const getOverrideRequests = async (filters?: {
 };
 
 export const getOverrideRequest = async (id: string) => {
+  // Validate id is not empty
+  if (!id || id.trim() === "") {
+    throw new Error("Override request id is required");
+  }
+
   return prisma.overrideRequest.findUnique({
     where: { id },
     include: {

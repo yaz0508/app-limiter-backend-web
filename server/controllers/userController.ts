@@ -14,13 +14,26 @@ export const list = async (req: Request, res: Response) => {
 };
 
 export const get = async (req: Request, res: Response) => {
-  const user = await getUserById(req.params.id);
-  if (!user) return res.status(404).json({ message: "User not found" });
+  try {
+    // Validate id parameter
+    if (!req.params.id || req.params.id.trim() === "") {
+      return res.status(400).json({ message: "User id is required" });
+    }
 
-  if (req.user!.role !== Role.ADMIN && req.user!.id !== user.id) {
-    return res.status(403).json({ message: "Forbidden" });
+    const user = await getUserById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (req.user!.role !== Role.ADMIN && req.user!.id !== user.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    res.json({ user });
+  } catch (err) {
+    const error = err as Error;
+    if (error.message === "User id is required") {
+      return res.status(400).json({ message: error.message });
+    }
+    throw err;
   }
-  res.json({ user });
 };
 
 export const create = async (req: Request, res: Response) => {
@@ -38,11 +51,23 @@ export const create = async (req: Request, res: Response) => {
 
 export const update = async (req: Request, res: Response) => {
   try {
+    // Validate id parameter
+    if (!req.params.id || req.params.id.trim() === "") {
+      return res.status(400).json({ message: "User id is required" });
+    }
+
     const user = await updateUser(req.params.id, req.user!, req.body);
     res.json({ user });
   } catch (err) {
-    if ((err as Error).message === "Forbidden") {
+    const error = err as Error;
+    if (error.message === "Forbidden") {
       return res.status(403).json({ message: "Forbidden" });
+    }
+    if (error.message === "User id is required" || error.message === "No updates provided") {
+      return res.status(400).json({ message: error.message });
+    }
+    if ((err as any)?.code === "P2025") {
+      return res.status(404).json({ message: "User not found" });
     }
     throw err;
   }
@@ -50,11 +75,23 @@ export const update = async (req: Request, res: Response) => {
 
 export const remove = async (req: Request, res: Response) => {
   try {
+    // Validate id parameter
+    if (!req.params.id || req.params.id.trim() === "") {
+      return res.status(400).json({ message: "User id is required" });
+    }
+
     await deleteUser(req.params.id, req.user!);
     res.status(204).send();
   } catch (err) {
-    if ((err as Error).message === "Forbidden") {
+    const error = err as Error;
+    if (error.message === "Forbidden") {
       return res.status(403).json({ message: "Forbidden" });
+    }
+    if (error.message === "User id is required") {
+      return res.status(400).json({ message: error.message });
+    }
+    if ((err as any)?.code === "P2025") {
+      return res.status(404).json({ message: "User not found" });
     }
     throw err;
   }
