@@ -252,10 +252,71 @@ const runStartupSeed = async () => {
   }
 };
 
+// Seed default categories on startup (idempotent, safe to run every time).
+const runCategoriesSeed = async () => {
+  try {
+    console.log("[STARTUP] Seeding default categories...");
+    const { prisma } = await import("./prisma/client");
+
+    // Check if categories already exist
+    const existingGames = await prisma.appCategory.findUnique({
+      where: { name: "Games" },
+    });
+    const existingSocialMedia = await prisma.appCategory.findUnique({
+      where: { name: "Social Media" },
+    });
+    const existingOthers = await prisma.appCategory.findUnique({
+      where: { name: "Others" },
+    });
+
+    if (!existingGames) {
+      await prisma.appCategory.create({
+        data: {
+          name: "Games",
+          description: "Gaming applications",
+        },
+      });
+      console.log("[STARTUP] ✓ Created 'Games' category");
+    } else {
+      console.log("[STARTUP] ⚠ 'Games' category already exists");
+    }
+
+    if (!existingSocialMedia) {
+      await prisma.appCategory.create({
+        data: {
+          name: "Social Media",
+          description: "Social networking and communication apps",
+        },
+      });
+      console.log("[STARTUP] ✓ Created 'Social Media' category");
+    } else {
+      console.log("[STARTUP] ⚠ 'Social Media' category already exists");
+    }
+
+    if (!existingOthers) {
+      await prisma.appCategory.create({
+        data: {
+          name: "Others",
+          description: "Other applications",
+        },
+      });
+      console.log("[STARTUP] ✓ Created 'Others' category");
+    } else {
+      console.log("[STARTUP] ⚠ 'Others' category already exists");
+    }
+
+    console.log("[STARTUP] Default categories seeded successfully!");
+  } catch (error) {
+    // Don't crash server if seed fails.
+    console.error("[STARTUP] Categories seed error (non-fatal):", error);
+  }
+};
+
 app.listen(port, async () => {
   console.log(`API listening on port ${port}`);
-  // Run seed in background (non-blocking).
+  // Run seeds in background (non-blocking).
   runStartupSeed().catch(console.error);
+  runCategoriesSeed().catch(console.error);
 });
 
 
