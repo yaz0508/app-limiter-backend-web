@@ -1,9 +1,19 @@
-const LoadingSkeleton = () => {
+interface LoadingSkeletonProps {
+  lines?: number;
+  className?: string;
+}
+
+const LoadingSkeleton = ({ lines = 3, className = "" }: LoadingSkeletonProps) => {
   return (
-    <div className="animate-pulse space-y-4">
-      <div className="h-4 w-3/4 rounded bg-slate-200"></div>
-      <div className="h-4 w-1/2 rounded bg-slate-200"></div>
-      <div className="h-4 w-5/6 rounded bg-slate-200"></div>
+    <div className={`animate-pulse space-y-3 ${className}`}>
+      {Array.from({ length: lines }).map((_, i) => (
+        <div
+          key={i}
+          className={`h-4 rounded bg-slate-200 ${
+            i === 0 ? "w-3/4" : i === 1 ? "w-1/2" : "w-5/6"
+          }`}
+        />
+      ))}
     </div>
   );
 };

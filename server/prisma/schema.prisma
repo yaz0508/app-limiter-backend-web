@@ -93,6 +93,8 @@ model UsageLog {
 
   @@index([deviceId, occurredAt])
   @@index([appId, occurredAt])
+  @@index([occurredAt]) // For date range queries
+  @@index([userId, occurredAt]) // For user-specific queries
 }
 
 model FocusSession {
@@ -201,6 +203,8 @@ model OverrideRequest {
   @@index([appId])
   @@index([status])
   @@index([deviceId, status])
+  @@index([deviceId, status, expiresAt]) // Critical for active override checks
+  @@index([expiresAt]) // For expiration queries
 }
 
 enum GoalType {

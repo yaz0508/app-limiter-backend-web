@@ -31,7 +31,7 @@ const credentialsSchema = z.object({
 const registerSchema = z.object({
   body: z.object({
     email: z.string().email(),
-    name: z.string().min(2),
+    name: z.string(), // Allow empty string - name will be set later during onboarding
     password: z.string().min(6),
   }),
   query: z.object({}).optional(),
