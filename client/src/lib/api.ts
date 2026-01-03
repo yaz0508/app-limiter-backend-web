@@ -190,6 +190,9 @@ export const deleteDevice = (token: string, deviceId: string) =>
 export const getDeviceApps = (token: string, deviceId: string) =>
   apiRequest<{ apps: App[] }>(`/apps/device/${deviceId}`, { token });
 
+export const getAllApps = (token: string) =>
+  apiRequest<{ apps: App[] }>("/apps", { token });
+
 // Sessions API
 export const getSessions = (token: string, deviceId: string) =>
   apiRequest<{ sessions: FocusSession[] }>(`/sessions/device/${deviceId}`, { token });

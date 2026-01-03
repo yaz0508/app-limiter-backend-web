@@ -7,6 +7,7 @@ import {
   deleteCategory,
   getCategories,
   getDeviceApps,
+  getAllApps,
   updateCategory,
   createCategoryLimit,
   getCategoryLimits,
@@ -22,20 +23,27 @@ const Categories = () => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [deviceApps, setDeviceApps] = useState<App[]>([]);
+  const [allApps, setAllApps] = useState<App[]>([]);
   const [categoryLimits, setCategoryLimits] = useState<CategoryLimit[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", description: "", selectedAppIds: new Set<string>() });
   const [limitForm, setLimitForm] = useState({ categoryId: "", dailyLimitMinutes: 60 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const init = async () => {
       if (!token) return;
       try {
-        const [catsResp, devsResp] = await Promise.all([getCategories(token), getDevices(token)]);
+        const [catsResp, devsResp, appsResp] = await Promise.all([
+          getCategories(token),
+          getDevices(token),
+          getAllApps(token),
+        ]);
         setCategories(catsResp.categories);
         setDevices(devsResp.devices);
+        setAllApps(appsResp.apps);
         if (devsResp.devices.length > 0) {
           setSelectedDevice(devsResp.devices[0].id);
         }
@@ -241,27 +249,65 @@ const Categories = () => {
 
             <div>
               <label className="text-sm font-medium text-slate-700">Apps in category</label>
-              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded border p-2">
-                {deviceApps.map((app) => {
-                  const checked = form.selectedAppIds.has(app.id);
-                  return (
-                    <label key={app.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-slate-50">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleApp(app.id)}
-                      />
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-slate-900">{app.name}</div>
-                        <div className="truncate text-xs text-slate-500">{app.packageName}</div>
-                      </div>
-                    </label>
-                  );
-                })}
-                {deviceApps.length === 0 && (
-                  <div className="text-sm text-slate-600">No apps found. Select a device first.</div>
+              <p className="mt-1 text-xs text-slate-500 mb-2">
+                Showing all detected apps from all devices. Use search to filter.
+              </p>
+              <input
+                type="text"
+                placeholder="Search apps..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="mb-2 w-full rounded border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              />
+              <div className="mt-2 max-h-96 space-y-1 overflow-y-auto rounded border p-2">
+                {allApps
+                  .filter((app) => {
+                    if (!searchQuery.trim()) return true;
+                    const query = searchQuery.toLowerCase();
+                    return (
+                      app.name.toLowerCase().includes(query) ||
+                      app.packageName.toLowerCase().includes(query)
+                    );
+                  })
+                  .map((app) => {
+                    const checked = form.selectedAppIds.has(app.id);
+                    return (
+                      <label
+                        key={app.id}
+                        className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleApp(app.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-slate-900">{app.name}</div>
+                          <div className="truncate text-xs text-slate-500">{app.packageName}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                {allApps.length === 0 && (
+                  <div className="text-sm text-slate-600">No apps found. Apps will appear here once they are detected on devices.</div>
                 )}
+                {allApps.length > 0 &&
+                  allApps.filter((app) => {
+                    if (!searchQuery.trim()) return true;
+                    const query = searchQuery.toLowerCase();
+                    return (
+                      app.name.toLowerCase().includes(query) ||
+                      app.packageName.toLowerCase().includes(query)
+                    );
+                  }).length === 0 && (
+                    <div className="text-sm text-slate-600">No apps match your search.</div>
+                  )}
               </div>
+              {form.selectedAppIds.size > 0 && (
+                <div className="mt-2 text-xs text-slate-600">
+                  {form.selectedAppIds.size} app{form.selectedAppIds.size !== 1 ? "s" : ""} selected
+                </div>
+              )}
             </div>
 
             <button
