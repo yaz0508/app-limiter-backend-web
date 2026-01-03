@@ -4,7 +4,7 @@ import Table from "../components/Table";
 import { TableSkeleton } from "../components/LoadingSkeleton";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { createUser, getDevices, getUsers, updateUser } from "../lib/api";
+import { createUser, deleteUser, getDevices, getUsers, updateUser } from "../lib/api";
 import { Device, User } from "../types";
 import EditUserModal from "../components/EditUserModal";
 import { exportUsersToCSV } from "../utils/export";
@@ -88,6 +88,34 @@ const Users = () => {
     // Reload users
     const resp = await getUsers(token);
     setUsers(resp.users);
+  };
+
+  const handleDeleteUser = async (user: RowUser) => {
+    if (!token) return;
+    
+    // Get device count for warning message
+    const deviceCount = user.deviceCount;
+    const warningMessage = deviceCount > 0
+      ? `Delete user "${user.name}"? This will permanently delete:\n\n• The user account\n• ${deviceCount} device(s) and all their data\n• All limits, sessions, logs, and goals\n\nThis action cannot be undone.`
+      : `Delete user "${user.name}"? This will permanently delete the user account and all associated data. This action cannot be undone.`;
+    
+    if (!confirm(warningMessage)) return;
+
+    try {
+      await deleteUser(token, user.id);
+      showToast(`User "${user.name}" deleted successfully`, "success");
+      // Reload users and devices
+      const [u, d] = await Promise.all([getUsers(token), getDevices(token)]);
+      setUsers(u.users);
+      setDevices(d.devices);
+    } catch (err) {
+      const errorMessage = (err as Error).message;
+      if (errorMessage.includes("Cannot delete your own account")) {
+        showToast("You cannot delete your own account", "error");
+      } else {
+        showToast(`Failed to delete user: ${errorMessage}`, "error");
+      }
+    }
   };
 
   return (
@@ -182,6 +210,13 @@ const Users = () => {
               title="Edit user"
             >
               Edit
+            </button>
+            <button
+              onClick={() => handleDeleteUser(u)}
+              className="text-sm text-red-600 hover:text-red-800"
+              title="Delete user"
+            >
+              Delete
             </button>
           </div>,
         ])}

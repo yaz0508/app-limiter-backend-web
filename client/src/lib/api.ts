@@ -175,6 +175,9 @@ export const createUser = (
   payload: { name: string; email: string; password: string; role?: string }
 ) => apiRequest<{ user: User }>("/users", { token, method: "POST", body: payload });
 
+export const deleteUser = (token: string, userId: string) =>
+  apiRequest<void>(`/users/${userId}`, { token, method: "DELETE" });
+
 export const updateDevice = (
   token: string,
   deviceId: string,
