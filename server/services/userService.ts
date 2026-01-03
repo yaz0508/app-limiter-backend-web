@@ -93,7 +93,111 @@ export const deleteUser = async (id: string, requester: Express.UserPayload) => 
     if (requester.role !== Role.ADMIN) {
         throw new Error("Forbidden");
     }
-    await prisma.user.delete({ where: { id } });
+
+    // Prevent self-deletion
+    if (requester.id === id) {
+        throw new Error("Cannot delete your own account");
+    }
+
+    // Use transaction to ensure atomicity
+    await prisma.$transaction(async (tx) => {
+        // Get all devices owned by this user
+        const userDevices = await tx.device.findMany({
+            where: { userId: id },
+            select: { id: true }
+        });
+        const deviceIds = userDevices.map(d => d.id);
+
+        // Delete all data related to user's devices
+        if (deviceIds.length > 0) {
+            // Delete active focus sessions for these devices
+            await tx.activeFocusSession.deleteMany({
+                where: { deviceId: { in: deviceIds } }
+            });
+
+            // Delete focus session apps (via sessions)
+            const sessions = await tx.focusSession.findMany({
+                where: { deviceId: { in: deviceIds } },
+                select: { id: true }
+            });
+            const sessionIds = sessions.map(s => s.id);
+            
+            if (sessionIds.length > 0) {
+                await tx.focusSessionApp.deleteMany({
+                    where: { sessionId: { in: sessionIds } }
+                });
+            }
+
+            // Delete focus sessions
+            await tx.focusSession.deleteMany({
+                where: { deviceId: { in: deviceIds } }
+            });
+
+            // Delete limits for these devices
+            await tx.limit.deleteMany({
+                where: { deviceId: { in: deviceIds } }
+            });
+
+            // Delete category limits for these devices
+            await tx.categoryLimit.deleteMany({
+                where: { deviceId: { in: deviceIds } }
+            });
+
+            // Delete override requests for these devices
+            await tx.overrideRequest.deleteMany({
+                where: { deviceId: { in: deviceIds } }
+            });
+
+            // Delete usage logs for these devices
+            await tx.usageLog.deleteMany({
+                where: { deviceId: { in: deviceIds } }
+            });
+
+            // Delete goals for these devices
+            await tx.usageGoal.deleteMany({
+                where: { deviceId: { in: deviceIds } }
+            });
+
+            // Delete the devices themselves
+            await tx.device.deleteMany({
+                where: { id: { in: deviceIds } }
+            });
+        }
+
+        // Delete limits created by this user (that may belong to other users' devices)
+        await tx.limit.deleteMany({
+            where: { createdById: id }
+        });
+
+        // Delete category limits created by this user
+        await tx.categoryLimit.deleteMany({
+            where: { createdById: id }
+        });
+
+        // Delete override requests approved by this user (set approvedById to null instead of deleting)
+        // This preserves the request history but removes the approval link
+        await tx.overrideRequest.updateMany({
+            where: { approvedById: id },
+            data: {
+                approvedById: null
+            }
+        });
+
+        // Delete goals created by this user (that may belong to other users' devices)
+        await tx.usageGoal.deleteMany({
+            where: { createdById: id }
+        });
+
+        // Delete usage logs associated with this user
+        await tx.usageLog.deleteMany({
+            where: { userId: id }
+        });
+
+        // Finally, delete the user
+        await tx.user.delete({
+            where: { id }
+        });
+    });
 };
 
 

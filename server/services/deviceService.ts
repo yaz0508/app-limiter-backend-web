@@ -301,7 +301,63 @@ export const deleteDevice = async (
   if (requester.role !== Role.ADMIN && device.userId !== requester.id) {
     throw new Error("Forbidden");
   }
-  await prisma.device.delete({ where: { id } });
+
+  // Use transaction to ensure atomicity and cascade deletion
+  await prisma.$transaction(async (tx) => {
+    // Delete active focus session for this device
+    await tx.activeFocusSession.deleteMany({
+      where: { deviceId: id }
+    });
+
+    // Get all focus sessions for this device
+    const sessions = await tx.focusSession.findMany({
+      where: { deviceId: id },
+      select: { id: true }
+    });
+    const sessionIds = sessions.map(s => s.id);
+
+    // Delete focus session apps
+    if (sessionIds.length > 0) {
+      await tx.focusSessionApp.deleteMany({
+        where: { sessionId: { in: sessionIds } }
+      });
+    }
+
+    // Delete focus sessions
+    await tx.focusSession.deleteMany({
+      where: { deviceId: id }
+    });
+
+    // Delete limits for this device
+    await tx.limit.deleteMany({
+      where: { deviceId: id }
+    });
+
+    // Delete category limits for this device
+    await tx.categoryLimit.deleteMany({
+      where: { deviceId: id }
+    });
+
+    // Delete override requests for this device
+    await tx.overrideRequest.deleteMany({
+      where: { deviceId: id }
+    });
+
+    // Delete usage logs for this device
+    await tx.usageLog.deleteMany({
+      where: { deviceId: id }
+    });
+
+    // Delete goals for this device
+    await tx.usageGoal.deleteMany({
+      where: { deviceId: id }
+    });
+
+    // Finally, delete the device itself
+    await tx.device.delete({
+      where: { id }
+    });
+  });
 };
 
 export const findDeviceByIdentifier = async (deviceIdentifier: string) => {
