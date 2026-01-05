@@ -8,6 +8,7 @@ import {
   createLimit,
   getDeviceLimits,
   removeLimit,
+  syncApps,
 } from "../controllers/categoryController";
 import { authenticate } from "../middleware/authMiddleware";
 import { validateRequest } from "../middleware/validateRequest";

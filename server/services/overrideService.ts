@@ -1,5 +1,6 @@
 import { prisma } from "../prisma/client";
 import { OverrideStatus } from "@prisma/client";
+import { sendOneSignalNotificationToAdmin } from "./oneSignalService";
 
 export interface CreateOverrideRequestInput {
   deviceId: string;
@@ -37,6 +38,36 @@ export const createOverrideRequest = async (input: CreateOverrideRequestInput) =
       },
     },
   });
+
+  // Notify admin phone via OneSignal (best-effort; do not block request creation)
+  try {
+    const userLabel =
+      request.device?.user?.name ||
+      request.device?.user?.email ||
+      request.device?.userId ||
+      "Unknown user";
+    const appLabel = request.app?.name || request.app?.packageName || "Unknown app";
+    const deviceLabel = request.device?.name || "Unknown device";
+
+    const title = "Override Request";
+    const message =
+      `${userLabel} requested +${request.requestedMinutes} min for ${appLabel}` +
+      `\nDevice: ${deviceLabel}` +
+      (request.reason ? `\nReason: ${request.reason}` : "");
+
+    // Fire-and-forget. If OneSignal isn't configured, the service logs and returns.
+    sendOneSignalNotificationToAdmin(title, message, {
+      type: "override_request",
+      overrideRequestId: request.id,
+      deviceId: request.deviceId,
+      appId: request.appId,
+      requestedMinutes: request.requestedMinutes,
+      status: request.status,
+    }).catch((err) => console.warn("[OneSignal] send failed", err));
+  } catch (e) {
+    // Never fail the API just because notification formatting failed
+    console.warn("[OneSignal] Notification formatting failed", e);
+  }
 
   return request;
 };
