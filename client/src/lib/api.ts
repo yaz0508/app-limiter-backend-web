@@ -144,6 +144,25 @@ export const getDailySeries = (token: string, deviceId: string, days: number = 3
   );
 };
 
+// Aggregated analytics endpoints (across all devices)
+export const getAggregatedWeeklyUsage = (token: string, start?: string) => {
+  const query = start ? `?start=${encodeURIComponent(start)}` : "";
+  return apiRequest<WeeklyUsageSummary>(`/usage/summary/aggregated/weekly${query}`, { token });
+};
+
+export const getAggregatedCustomRangeUsage = (token: string, start: string, end: string) => {
+  const query = `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+  return apiRequest<WeeklyUsageSummary>(`/usage/summary/aggregated/range${query}`, { token });
+};
+
+export const getAggregatedDailySeries = (token: string, days: number = 30) => {
+  const query = `?days=${encodeURIComponent(String(days))}`;
+  return apiRequest<{ days: number; series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> }>(
+    `/usage/summary/aggregated/daily-series${query}`,
+    { token }
+  );
+};
+
 // Analytics API endpoints
 export const getDailyAnalytics = (token: string, deviceId: string) =>
   apiRequest<any>(`/analytics/daily/${deviceId}`, { token });

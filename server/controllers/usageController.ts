@@ -7,6 +7,9 @@ import {
   getDailySummary,
   getWeeklySummary,
   ingestUsageLog,
+  getAggregatedWeeklySummary,
+  getAggregatedDailySeries,
+  getAggregatedCustomRangeSummary,
 } from "../services/usageService";
 
 export const ingest = async (req: Request, res: Response) => {
@@ -119,6 +122,61 @@ export const dailySeries = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("[UsageController] Error in dailySeries:", error);
     res.status(500).json({ message: "Failed to get daily series" });
+  }
+};
+
+// Aggregated analytics controllers
+export const aggregatedWeeklySummary = async (req: Request, res: Response) => {
+  try {
+    const { start } = req.query as { start?: string };
+    const summary = await getAggregatedWeeklySummary(req.user!, start);
+    console.log(`[UsageController] Aggregated weekly summary:`, {
+      start: summary.start,
+      end: summary.end,
+      totalSeconds: summary.totalSeconds,
+      appCount: summary.byApp.length,
+    });
+    res.json(summary);
+  } catch (error) {
+    console.error("[UsageController] Error in aggregatedWeeklySummary:", error);
+    res.status(500).json({ message: "Failed to get aggregated weekly summary" });
+  }
+};
+
+export const aggregatedDailySeries = async (req: Request, res: Response) => {
+  try {
+    const { days } = req.query as { days?: string };
+    const parsedDays = days ? Number(days) : 30;
+    const safeDays = Number.isFinite(parsedDays)
+      ? Math.min(365, Math.max(7, Math.floor(parsedDays)))
+      : 30;
+
+    const series = await getAggregatedDailySeries(req.user!, safeDays);
+    res.json({ days: safeDays, series });
+  } catch (error) {
+    console.error("[UsageController] Error in aggregatedDailySeries:", error);
+    res.status(500).json({ message: "Failed to get aggregated daily series" });
+  }
+};
+
+export const aggregatedCustomRangeSummary = async (req: Request, res: Response) => {
+  try {
+    const { start, end } = req.query as { start?: string; end?: string };
+    if (!start || !end) {
+      return res.status(400).json({ message: "Both start and end dates are required" });
+    }
+
+    const summary = await getAggregatedCustomRangeSummary(req.user!, start, end);
+    console.log(`[UsageController] Aggregated custom range summary:`, {
+      start: summary.start,
+      end: summary.end,
+      totalSeconds: summary.totalSeconds,
+      appCount: summary.byApp.length,
+    });
+    res.json(summary);
+  } catch (error) {
+    console.error("[UsageController] Error in aggregatedCustomRangeSummary:", error);
+    res.status(500).json({ message: "Failed to get aggregated custom range summary" });
   }
 };
 

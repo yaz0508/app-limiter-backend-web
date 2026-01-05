@@ -4,7 +4,7 @@ import UsageChart from "../components/UsageChart";
 import TrendChart from "../components/TrendChart";
 import DateRangePicker from "../components/DateRangePicker";
 import { useAuth } from "../context/AuthContext";
-import { getCustomRangeUsage, getDailySeries, getDevices, getWeeklyUsage } from "../lib/api";
+import { getAggregatedCustomRangeUsage, getAggregatedDailySeries, getAggregatedWeeklyUsage, getDevices } from "../lib/api";
 import { Device, WeeklyUsageSummary } from "../types";
 import { exportUsageToCSV } from "../utils/export";
 import { useToast } from "../context/ToastContext";
@@ -13,7 +13,6 @@ const Dashboard = () => {
   const { token } = useAuth();
   const { showToast } = useToast();
   const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [summary, setSummary] = useState<WeeklyUsageSummary | null>(null);
   const [series, setSeries] = useState<Array<{ date: string; totalMinutes: number }>>([]);
   const [loading, setLoading] = useState(false);
@@ -23,31 +22,33 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDevices = async () => {
       if (!token) return;
-      const resp = await getDevices(token);
-      setDevices(resp.devices);
-      if (resp.devices.length > 0) {
-        setSelectedDevice(resp.devices[0].id);
+      try {
+        const resp = await getDevices(token);
+        setDevices(resp.devices);
+      } catch (err) {
+        setError((err as Error).message);
       }
     };
-    fetchDevices().catch((err) => setError((err as Error).message));
+    fetchDevices();
   }, [token]);
 
   useEffect(() => {
     const loadUsage = async () => {
-      if (!token || !selectedDevice) return;
+      if (!token) return;
       setLoading(true);
       setError(null);
       try {
+        // Use aggregated endpoints - data across all devices
         let weekly: WeeklyUsageSummary;
         if (dateRange) {
-          weekly = await getCustomRangeUsage(token, selectedDevice, dateRange.start, dateRange.end);
+          weekly = await getAggregatedCustomRangeUsage(token, dateRange.start, dateRange.end);
         } else {
-          weekly = await getWeeklyUsage(token, selectedDevice);
+          weekly = await getAggregatedWeeklyUsage(token);
         }
         setSummary(weekly);
 
-        // Trend (daily series) - always last 30 PH days for the selected device
-        const daily = await getDailySeries(token, selectedDevice, 30);
+        // Trend (daily series) - last 30 days aggregated across all devices
+        const daily = await getAggregatedDailySeries(token, 30);
         setSeries(daily.series.map((p) => ({ date: p.date, totalMinutes: p.totalMinutes })));
       } catch (err) {
         setError((err as Error).message);
@@ -59,13 +60,13 @@ const Dashboard = () => {
     
     // Real-time updates: refresh every 30 seconds
     const interval = setInterval(() => {
-      if (token && selectedDevice && !dateRange) {
+      if (token && !dateRange) {
         loadUsage();
       }
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [token, selectedDevice, dateRange]);
+  }, [token, dateRange]);
 
   const totalMinutes = useMemo(() => {
     if (!summary) return 0;
@@ -78,21 +79,10 @@ const Dashboard = () => {
       {/* Header Section */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary">Dashboard Overview</h1>
-          <p className="mt-1 text-sm text-text-secondary">Monitor device usage and analytics</p>
+          <h1 className="text-3xl font-bold text-text-primary">Overall Analytics</h1>
+          <p className="mt-1 text-sm text-text-secondary">Aggregated usage across all {devices.length} device{devices.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <select
-            value={selectedDevice}
-            onChange={(e) => setSelectedDevice(e.target.value)}
-            className="select w-full sm:w-auto"
-          >
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name} ({d.deviceIdentifier})
-              </option>
-            ))}
-          </select>
           <div className="flex items-center gap-2">
             <DateRangePicker
               onRangeChange={(start, end) => setDateRange({ start, end })}
@@ -119,10 +109,11 @@ const Dashboard = () => {
       )}
 
       {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard 
-          label="Weekly Total" 
+          label={dateRange ? "Total Usage" : "Weekly Total"} 
           value={`${totalMinutes} mins`}
+          helper={dateRange ? `Across all ${devices.length} device${devices.length !== 1 ? 's' : ''}` : `Across all ${devices.length} device${devices.length !== 1 ? 's' : ''}`}
           icon={
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -130,9 +121,9 @@ const Dashboard = () => {
           }
         />
         <StatCard
-          label="Tracked Apps"
-          value={`${summary?.byApp.length ?? 0}`}
-          helper="Apps reported in the selected window"
+          label="Total Devices"
+          value={`${devices.length}`}
+          helper="Devices registered in the system"
           icon={
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -140,8 +131,19 @@ const Dashboard = () => {
           }
         />
         <StatCard
-          label="Sessions"
+          label="Tracked Apps"
+          value={`${summary?.byApp.length ?? 0}`}
+          helper="Unique apps across all devices"
+          icon={
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          }
+        />
+        <StatCard
+          label="Total Sessions"
           value={`${summary?.byApp.reduce((acc, item) => acc + item.sessions, 0) ?? 0}`}
+          helper="App sessions across all devices"
           icon={
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />

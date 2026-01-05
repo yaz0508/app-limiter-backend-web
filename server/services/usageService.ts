@@ -287,3 +287,239 @@ export const ingestUsageLog = async (input: {
     console.log(`[UsageService] Ingested usage log: device=${device.id}, app=${app.packageName}, duration=${durationSeconds}s`);
     return log;
 };
+
+// Aggregated analytics across all devices
+export const getAggregatedWeeklySummary = async (requester: Express.UserPayload, startDateISO?: string) => {
+    const start = startDateISO ? new Date(startDateISO) : new Date();
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    end.setHours(23, 59, 59, 999);
+
+    // Get all devices the requester has access to
+    const deviceWhere = requester.role === Role.ADMIN ? {} : { userId: requester.id };
+    const devices = await prisma.device.findMany({
+        where: deviceWhere,
+        select: { id: true },
+    });
+    const deviceIds = devices.map(d => d.id);
+
+    if (deviceIds.length === 0) {
+        return {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            totalSeconds: 0,
+            byApp: [],
+        };
+    }
+
+    // Get all usage logs across all devices
+    const logs = await prisma.usageLog.findMany({
+        where: {
+            deviceId: { in: deviceIds },
+            occurredAt: {
+                gte: start,
+                lte: end,
+            },
+        },
+        include: {
+            app: true,
+        },
+    });
+
+    // Aggregate by app across all devices
+    const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalSeconds: number; sessions: number }>();
+    
+    for (const log of logs) {
+        const key = log.appId;
+        if (!appMap.has(key)) {
+            appMap.set(key, {
+                appId: log.appId,
+                appName: log.app.name,
+                packageName: log.app.packageName,
+                totalSeconds: 0,
+                sessions: 0,
+            });
+        }
+        const entry = appMap.get(key)!;
+        entry.totalSeconds += log.durationSeconds;
+        entry.sessions += 1;
+    }
+
+    const byApp = Array.from(appMap.values()).map(entry => ({
+        appId: entry.appId,
+        appName: entry.appName,
+        packageName: entry.packageName,
+        totalMinutes: Math.round((entry.totalSeconds / 60) * 100) / 100,
+        totalSeconds: entry.totalSeconds,
+        sessions: entry.sessions,
+    }));
+
+    const totalSeconds = byApp.reduce((sum, app) => sum + app.totalSeconds, 0);
+
+    return {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        totalSeconds,
+        byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
+    };
+};
+
+export const getAggregatedDailySeries = async (requester: Express.UserPayload, days: number) => {
+    const endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Get all devices the requester has access to
+    const deviceWhere = requester.role === Role.ADMIN ? {} : { userId: requester.id };
+    const devices = await prisma.device.findMany({
+        where: deviceWhere,
+        select: { id: true },
+    });
+    const deviceIds = devices.map(d => d.id);
+
+    if (deviceIds.length === 0) {
+        // Return empty series for all days
+        const series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> = [];
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+            const dateKey = currentDate.toISOString().split('T')[0];
+            series.push({
+                date: dateKey,
+                totalSeconds: 0,
+                totalMinutes: 0,
+                sessions: 0,
+            });
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        return series;
+    }
+
+    // Get all usage logs across all devices
+    const logs = await prisma.usageLog.findMany({
+        where: {
+            deviceId: { in: deviceIds },
+            occurredAt: {
+                gte: startDate,
+                lte: endDate,
+            },
+        },
+    });
+
+    // Group by date
+    const dateMap = new Map<string, { totalSeconds: number; sessions: number }>();
+    
+    for (const log of logs) {
+        const dateKey = new Date(log.occurredAt).toISOString().split('T')[0];
+        if (!dateMap.has(dateKey)) {
+            dateMap.set(dateKey, { totalSeconds: 0, sessions: 0 });
+        }
+        const entry = dateMap.get(dateKey)!;
+        entry.totalSeconds += log.durationSeconds;
+        entry.sessions += 1;
+    }
+
+    // Generate series for all days in range (including days with no data)
+    const series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> = [];
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+        const dateKey = currentDate.toISOString().split('T')[0];
+        const entry = dateMap.get(dateKey) || { totalSeconds: 0, sessions: 0 };
+        
+        series.push({
+            date: dateKey,
+            totalSeconds: entry.totalSeconds,
+            totalMinutes: Math.round((entry.totalSeconds / 60) * 100) / 100,
+            sessions: entry.sessions,
+        });
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return series;
+};
+
+export const getAggregatedCustomRangeSummary = async (
+    requester: Express.UserPayload,
+    startDateISO: string,
+    endDateISO: string
+) => {
+    const start = new Date(startDateISO);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(endDateISO);
+    end.setHours(23, 59, 59, 999);
+
+    // Get all devices the requester has access to
+    const deviceWhere = requester.role === Role.ADMIN ? {} : { userId: requester.id };
+    const devices = await prisma.device.findMany({
+        where: deviceWhere,
+        select: { id: true },
+    });
+    const deviceIds = devices.map(d => d.id);
+
+    if (deviceIds.length === 0) {
+        return {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            totalSeconds: 0,
+            byApp: [],
+        };
+    }
+
+    // Get all usage logs across all devices
+    const logs = await prisma.usageLog.findMany({
+        where: {
+            deviceId: { in: deviceIds },
+            occurredAt: {
+                gte: start,
+                lte: end,
+            },
+        },
+        include: {
+            app: true,
+        },
+    });
+
+    // Aggregate by app across all devices
+    const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalSeconds: number; sessions: number }>();
+    
+    for (const log of logs) {
+        const key = log.appId;
+        if (!appMap.has(key)) {
+            appMap.set(key, {
+                appId: log.appId,
+                appName: log.app.name,
+                packageName: log.app.packageName,
+                totalSeconds: 0,
+                sessions: 0,
+            });
+        }
+        const entry = appMap.get(key)!;
+        entry.totalSeconds += log.durationSeconds;
+        entry.sessions += 1;
+    }
+
+    const byApp = Array.from(appMap.values()).map(entry => ({
+        appId: entry.appId,
+        appName: entry.appName,
+        packageName: entry.packageName,
+        totalMinutes: Math.round((entry.totalSeconds / 60) * 100) / 100,
+        totalSeconds: entry.totalSeconds,
+        sessions: entry.sessions,
+    }));
+
+    const totalSeconds = byApp.reduce((sum, app) => sum + app.totalSeconds, 0);
+
+    return {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        totalSeconds,
+        byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
+    };
+};
