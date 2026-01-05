@@ -99,105 +99,148 @@ export const deleteUser = async (id: string, requester: Express.UserPayload) => 
         throw new Error("Cannot delete your own account");
     }
 
-    // Use transaction to ensure atomicity
-    await prisma.$transaction(async (tx) => {
-        // Get all devices owned by this user
-        const userDevices = await tx.device.findMany({
-            where: { userId: id },
-            select: { id: true }
-        });
-        const deviceIds = userDevices.map(d => d.id);
+    // Retry logic for transaction deadlocks (MongoDB P2034 error)
+    const maxRetries = 5;
+    let lastError: any = null;
 
-        // Delete all data related to user's devices
-        if (deviceIds.length > 0) {
-            // Delete active focus sessions for these devices
-            await tx.activeFocusSession.deleteMany({
-                where: { deviceId: { in: deviceIds } }
-            });
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            // Use transaction with timeout to prevent long-running transactions
+            await prisma.$transaction(
+                async (tx) => {
+                    // Get all devices owned by this user
+                    const userDevices = await tx.device.findMany({
+                        where: { userId: id },
+                        select: { id: true }
+                    });
+                    const deviceIds = userDevices.map(d => d.id);
 
-            // Delete focus session apps (via sessions)
-            const sessions = await tx.focusSession.findMany({
-                where: { deviceId: { in: deviceIds } },
-                select: { id: true }
-            });
-            const sessionIds = sessions.map(s => s.id);
+                    // Delete all data related to user's devices
+                    // Order matters: delete child records first, then parent records
+                    if (deviceIds.length > 0) {
+                        // 1. Delete active focus sessions (no dependencies)
+                        await tx.activeFocusSession.deleteMany({
+                            where: { deviceId: { in: deviceIds } }
+                        });
+
+                        // 2. Get focus sessions before deleting their apps
+                        const sessions = await tx.focusSession.findMany({
+                            where: { deviceId: { in: deviceIds } },
+                            select: { id: true }
+                        });
+                        const sessionIds = sessions.map(s => s.id);
+                        
+                        // 3. Delete focus session apps (depends on sessions)
+                        if (sessionIds.length > 0) {
+                            await tx.focusSessionApp.deleteMany({
+                                where: { sessionId: { in: sessionIds } }
+                            });
+                        }
+
+                        // 4. Delete focus sessions (depends on session apps being deleted)
+                        await tx.focusSession.deleteMany({
+                            where: { deviceId: { in: deviceIds } }
+                        });
+
+                        // 5. Delete limits (depends on devices)
+                        await tx.limit.deleteMany({
+                            where: { deviceId: { in: deviceIds } }
+                        });
+
+                        // 6. Delete category limits (depends on devices)
+                        await tx.categoryLimit.deleteMany({
+                            where: { deviceId: { in: deviceIds } }
+                        });
+
+                        // 7. Delete override requests (depends on devices)
+                        await tx.overrideRequest.deleteMany({
+                            where: { deviceId: { in: deviceIds } }
+                        });
+
+                        // 8. Delete usage logs (depends on devices)
+                        await tx.usageLog.deleteMany({
+                            where: { deviceId: { in: deviceIds } }
+                        });
+
+                        // 9. Delete goals (depends on devices)
+                        await tx.usageGoal.deleteMany({
+                            where: { deviceId: { in: deviceIds } }
+                        });
+
+                        // 10. Finally, delete the devices themselves
+                        await tx.device.deleteMany({
+                            where: { id: { in: deviceIds } }
+                        });
+                    }
+
+                    // Delete limits created by this user (that may belong to other users' devices)
+                    await tx.limit.deleteMany({
+                        where: { createdById: id }
+                    });
+
+                    // Delete category limits created by this user
+                    await tx.categoryLimit.deleteMany({
+                        where: { createdById: id }
+                    });
+
+                    // Update override requests approved by this user (set approvedById to null instead of deleting)
+                    // This preserves the request history but removes the approval link
+                    await tx.overrideRequest.updateMany({
+                        where: { approvedById: id },
+                        data: {
+                            approvedById: null
+                        }
+                    });
+
+                    // Delete goals created by this user (that may belong to other users' devices)
+                    await tx.usageGoal.deleteMany({
+                        where: { createdById: id }
+                    });
+
+                    // Delete usage logs associated with this user
+                    await tx.usageLog.deleteMany({
+                        where: { userId: id }
+                    });
+
+                    // Finally, delete the user
+                    await tx.user.delete({
+                        where: { id }
+                    });
+                },
+                {
+                    maxWait: 10000, // Maximum time to wait for a transaction slot (10 seconds)
+                    timeout: 30000, // Maximum time the transaction can run (30 seconds)
+                }
+            );
+
+            // Success - break out of retry loop
+            console.log(`[deleteUser] User and all related data deleted: ${id}`);
+            return;
+        } catch (error: any) {
+            lastError = error;
             
-            if (sessionIds.length > 0) {
-                await tx.focusSessionApp.deleteMany({
-                    where: { sessionId: { in: sessionIds } }
-                });
+            // Check if it's a transaction conflict error (P2034)
+            if (error.code === 'P2034') {
+                // Calculate exponential backoff delay: 100ms, 200ms, 400ms, 800ms, 1600ms
+                const delayMs = Math.min(100 * Math.pow(2, attempt), 2000);
+                
+                console.warn(
+                    `[deleteUser] Transaction conflict (P2034) on attempt ${attempt + 1}/${maxRetries} for user deletion ${id}. Retrying in ${delayMs}ms...`
+                );
+                
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+                continue; // Retry
+            } else {
+                // Not a transaction conflict - throw immediately
+                throw error;
             }
-
-            // Delete focus sessions
-            await tx.focusSession.deleteMany({
-                where: { deviceId: { in: deviceIds } }
-            });
-
-            // Delete limits for these devices
-            await tx.limit.deleteMany({
-                where: { deviceId: { in: deviceIds } }
-            });
-
-            // Delete category limits for these devices
-            await tx.categoryLimit.deleteMany({
-                where: { deviceId: { in: deviceIds } }
-            });
-
-            // Delete override requests for these devices
-            await tx.overrideRequest.deleteMany({
-                where: { deviceId: { in: deviceIds } }
-            });
-
-            // Delete usage logs for these devices
-            await tx.usageLog.deleteMany({
-                where: { deviceId: { in: deviceIds } }
-            });
-
-            // Delete goals for these devices
-            await tx.usageGoal.deleteMany({
-                where: { deviceId: { in: deviceIds } }
-            });
-
-            // Delete the devices themselves
-            await tx.device.deleteMany({
-                where: { id: { in: deviceIds } }
-            });
         }
+    }
 
-        // Delete limits created by this user (that may belong to other users' devices)
-        await tx.limit.deleteMany({
-            where: { createdById: id }
-        });
-
-        // Delete category limits created by this user
-        await tx.categoryLimit.deleteMany({
-            where: { createdById: id }
-        });
-
-        // Delete override requests approved by this user (set approvedById to null instead of deleting)
-        // This preserves the request history but removes the approval link
-        await tx.overrideRequest.updateMany({
-            where: { approvedById: id },
-            data: {
-                approvedById: null
-            }
-        });
-
-        // Delete goals created by this user (that may belong to other users' devices)
-        await tx.usageGoal.deleteMany({
-            where: { createdById: id }
-        });
-
-        // Delete usage logs associated with this user
-        await tx.usageLog.deleteMany({
-            where: { userId: id }
-        });
-
-        // Finally, delete the user
-        await tx.user.delete({
-            where: { id }
-        });
-    });
+    // All retries exhausted
+    console.error(`[deleteUser] Failed to delete user ${id} after ${maxRetries} attempts`, lastError);
+    throw new Error(`Failed to delete user after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
 };
 
 

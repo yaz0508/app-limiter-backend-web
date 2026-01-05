@@ -8,6 +8,9 @@ import {
   createSession,
   pauseActiveSessionForDevice,
   resumeActiveSessionForDevice,
+  updateSession,
+  deleteSession,
+  getSessionById,
 } from "../services/sessionService";
 
 const ensureAccessIfJwtPresent = (deviceUserId: string, user?: Express.UserPayload) => {
@@ -139,6 +142,61 @@ export const resumeForDeviceIdentifier = async (req: Request, res: Response) => 
     const active = await resumeActiveSessionForDevice(device.id);
     if (!active) return res.status(404).json({ message: "No active session found" });
     res.json({ active });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+export const updateForDeviceIdentifier = async (req: Request, res: Response) => {
+  const { name, durationMinutes, apps } = req.body as {
+    name?: string;
+    durationMinutes?: number;
+    apps?: Array<{ packageName: string; appName?: string }>;
+  };
+  const { sessionId } = req.params;
+  try {
+    const deviceIdentifier = req.params.deviceIdentifier;
+    const device = await findDeviceByIdentifier(deviceIdentifier);
+    if (!device) return res.status(400).json({ message: "Device not registered" });
+
+    ensureAccessIfJwtPresent(device.userId, req.user);
+
+    // Verify session belongs to this device
+    const session = await getSessionById(sessionId);
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    if (session.deviceId !== device.id) return res.status(403).json({ message: "Forbidden" });
+
+    const updated = await updateSession(sessionId, {
+      name,
+      durationMinutes,
+      apps,
+    });
+    res.json({ session: updated });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });
+    throw err;
+  }
+};
+
+export const deleteForDeviceIdentifier = async (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  try {
+    const deviceIdentifier = req.params.deviceIdentifier;
+    const device = await findDeviceByIdentifier(deviceIdentifier);
+    if (!device) return res.status(400).json({ message: "Device not registered" });
+
+    ensureAccessIfJwtPresent(device.userId, req.user);
+
+    // Verify session belongs to this device
+    const session = await getSessionById(sessionId);
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    if (session.deviceId !== device.id) return res.status(403).json({ message: "Forbidden" });
+
+    await deleteSession(sessionId);
+    res.status(204).send();
   } catch (err) {
     const msg = (err as Error).message;
     if (msg === "Forbidden") return res.status(403).json({ message: "Forbidden" });

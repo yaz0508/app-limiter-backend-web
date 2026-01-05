@@ -10,6 +10,8 @@ import {
   createForDeviceIdentifier,
   pauseForDeviceIdentifier,
   resumeForDeviceIdentifier,
+  updateForDeviceIdentifier,
+  deleteForDeviceIdentifier,
 } from "../controllers/mobileSessionController";
 
 const router = Router();
@@ -123,6 +125,45 @@ router.post(
     })
   ),
   resumeForDeviceIdentifier
+);
+
+router.put(
+  "/:deviceIdentifier/:sessionId",
+  validateRequest(
+    z.object({
+      params: z.object({ 
+        deviceIdentifier: z.string().min(3),
+        sessionId: z.string().min(1)
+      }),
+      body: z.object({
+        name: z.string().min(1).optional(),
+        durationMinutes: z.number().int().min(5).max(360).optional(),
+        apps: z.array(
+          z.object({
+            packageName: z.string().min(1),
+            appName: z.string().optional(),
+          })
+        ).min(1).optional(),
+      }),
+      query: z.object({}).optional(),
+    })
+  ),
+  updateForDeviceIdentifier
+);
+
+router.delete(
+  "/:deviceIdentifier/:sessionId",
+  validateRequest(
+    z.object({
+      params: z.object({ 
+        deviceIdentifier: z.string().min(3),
+        sessionId: z.string().min(1)
+      }),
+      body: z.object({}).optional(),
+      query: z.object({}).optional(),
+    })
+  ),
+  deleteForDeviceIdentifier
 );
 
 export const mobileSessionRouter = router;
