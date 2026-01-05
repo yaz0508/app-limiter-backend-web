@@ -6,6 +6,7 @@ export default {
       colors: {
         // Modern gradient-based palette
         primary: {
+          DEFAULT: "#4f46e5", // Alias for primary-600
           50: "#f0f4ff",
           100: "#e0e9ff",
           200: "#c7d7fe",

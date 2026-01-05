@@ -41,7 +41,7 @@
   }
   
   .btn-secondary {
-    @apply bg-surface-elevated text-text-primary border border-border hover:bg-surface-pressed focus:ring-primary-500;
+    @apply bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 hover:border-slate-400 focus:ring-primary-500 shadow-sm;
   }
   
   .btn-ghost {
