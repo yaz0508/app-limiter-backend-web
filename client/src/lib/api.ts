@@ -44,9 +44,38 @@ const apiRequest = async <T>(path: string, options: Options = {}): Promise<T> =>
       throw new Error(message);
     }
 
-    const data = await res.json();
-    console.log(`[API] Success response:`, data);
-    return data;
+    // Handle 204 No Content (common for DELETE operations) - no body to parse
+    if (res.status === 204) {
+      console.log(`[API] Success response: 204 No Content`);
+      return undefined as T;
+    }
+
+    // Check if response has content before parsing JSON
+    const contentType = res.headers.get("content-type");
+    const contentLength = res.headers.get("content-length");
+    
+    // If content-length is 0 or content-type doesn't indicate JSON, return undefined
+    if (contentLength === "0" || (contentType && !contentType.includes("application/json"))) {
+      console.log(`[API] Success response: Empty or non-JSON body`);
+      return undefined as T;
+    }
+
+    // Try to parse JSON, but handle empty responses gracefully
+    const text = await res.text();
+    if (!text || text.trim() === "") {
+      console.log(`[API] Success response: Empty body`);
+      return undefined as T;
+    }
+
+    try {
+      const data = JSON.parse(text);
+      console.log(`[API] Success response:`, data);
+      return data;
+    } catch (parseError) {
+      // If JSON parsing fails but status is OK, return undefined (for empty DELETE responses)
+      console.warn(`[API] Failed to parse JSON response, but status is OK. Returning undefined.`, parseError);
+      return undefined as T;
+    }
   } catch (error) {
     // Handle network errors (connection refused, CORS, timeout, etc.)
     if (
