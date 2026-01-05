@@ -8,8 +8,9 @@ import {
   createCategoryLimit,
   getCategoryLimitsForDevice,
   deleteCategoryLimit,
+  syncAppCategories,
 } from "../services/categoryService";
-import { getDeviceForRequester } from "../services/deviceService";
+import { getDeviceForRequester, findDeviceByIdentifier } from "../services/deviceService";
 
 export const create = async (req: Request, res: Response) => {
   try {
@@ -110,6 +111,34 @@ export const removeLimit = async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ message: err.message || "Failed to delete category limit" });
+  }
+};
+
+export const syncApps = async (req: Request, res: Response) => {
+  try {
+    const { deviceIdentifier, appCategories } = req.body;
+    
+    // Verify device exists
+    const device = await findDeviceByIdentifier(deviceIdentifier);
+    if (!device) {
+      return res.status(400).json({ message: "Device not registered" });
+    }
+
+    // Ensure user has access (if JWT present)
+    if (req.user) {
+      if (req.user.role !== "ADMIN" && device.userId !== req.user.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+    }
+
+    const synced = await syncAppCategories({
+      deviceIdentifier,
+      appCategories,
+    });
+
+    res.json({ synced });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || "Failed to sync app categories" });
   }
 };
 

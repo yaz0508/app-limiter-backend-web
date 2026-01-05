@@ -9,25 +9,19 @@ import {
   getDeviceApps,
   getAllApps,
   updateCategory,
-  createCategoryLimit,
-  getCategoryLimits,
-  deleteCategoryLimit,
   getDevices,
 } from "../lib/api";
-import type { App, AppCategory, CategoryLimit, Device } from "../types";
+import type { App, AppCategory, Device } from "../types";
 
 const Categories = () => {
   const { token } = useAuth();
   const { showToast } = useToast();
   const [categories, setCategories] = useState<AppCategory[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [deviceApps, setDeviceApps] = useState<App[]>([]);
   const [allApps, setAllApps] = useState<App[]>([]);
-  const [categoryLimits, setCategoryLimits] = useState<CategoryLimit[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", description: "", selectedAppIds: new Set<string>() });
-  const [limitForm, setLimitForm] = useState({ categoryId: "", dailyLimitMinutes: 60 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,9 +38,6 @@ const Categories = () => {
         setCategories(catsResp.categories);
         setDevices(devsResp.devices);
         setAllApps(appsResp.apps);
-        if (devsResp.devices.length > 0) {
-          setSelectedDevice(devsResp.devices[0].id);
-        }
       } catch (err) {
         setError((err as Error).message);
       }
@@ -54,22 +45,6 @@ const Categories = () => {
     init();
   }, [token]);
 
-  useEffect(() => {
-    const loadDeviceData = async () => {
-      if (!token || !selectedDevice) return;
-      try {
-        const [appsResp, limitsResp] = await Promise.all([
-          getDeviceApps(token, selectedDevice),
-          getCategoryLimits(token, selectedDevice),
-        ]);
-        setDeviceApps(appsResp.apps);
-        setCategoryLimits(limitsResp.limits);
-      } catch (err) {
-        setError((err as Error).message);
-      }
-    };
-    loadDeviceData();
-  }, [token, selectedDevice]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -105,49 +80,13 @@ const Categories = () => {
 
   const handleDelete = async (id: string) => {
     if (!token) return;
-    if (!confirm("Delete this category? This will also remove all category limits.")) return;
+    if (!confirm("Delete this category? This will remove all apps from this category.")) return;
     try {
       await deleteCategory(token, id);
       showToast("Category deleted successfully", "success");
       const resp = await getCategories(token);
       setCategories(resp.categories);
       if (editingId === id) resetForm();
-    } catch (err) {
-      showToast((err as Error).message, "error");
-    }
-  };
-
-  const handleLimitSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!token || !selectedDevice) return;
-    setError(null);
-    setLoading(true);
-    try {
-      await createCategoryLimit(token, {
-        deviceId: selectedDevice,
-        categoryId: limitForm.categoryId,
-        dailyLimitMinutes: limitForm.dailyLimitMinutes,
-      });
-      showToast("Category limit created successfully", "success");
-      const resp = await getCategoryLimits(token, selectedDevice);
-      setCategoryLimits(resp.limits);
-      setLimitForm({ categoryId: "", dailyLimitMinutes: 60 });
-    } catch (err) {
-      setError((err as Error).message);
-      showToast((err as Error).message, "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteLimit = async (categoryId: string) => {
-    if (!token || !selectedDevice) return;
-    if (!confirm("Remove this category limit?")) return;
-    try {
-      await deleteCategoryLimit(token, selectedDevice, categoryId);
-      showToast("Category limit removed successfully", "success");
-      const resp = await getCategoryLimits(token, selectedDevice);
-      setCategoryLimits(resp.limits);
     } catch (err) {
       showToast((err as Error).message, "error");
     }
@@ -187,14 +126,13 @@ const Categories = () => {
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="order-2 lg:order-1">
           <Table
-            headers={["Category", "Apps", "Limits", "Actions"]}
+            headers={["Category", "Apps", "Actions"]}
             rows={categories.map((cat) => [
               <div key="name">
                 <div className="font-semibold">{cat.name}</div>
                 {cat.description && <div className="text-xs text-slate-500">{cat.description}</div>}
               </div>,
               `${cat.apps?.length || 0}`,
-              `${cat._count?.limits || 0}`,
               <div key="actions" className="flex gap-2">
                 <button
                   className="text-sm text-primary hover:underline"
@@ -317,90 +255,6 @@ const Categories = () => {
               {loading ? "Saving..." : editingId ? "Update category" : "Create category"}
             </button>
           </form>
-          </div>
-        </div>
-      </div>
-
-      {/* Category Limits Section */}
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Category Limits</h2>
-          <select
-            value={selectedDevice}
-            onChange={(e) => setSelectedDevice(e.target.value)}
-            className="rounded border px-3 py-2 text-sm"
-          >
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-          <div>
-            <Table
-              headers={["Category", "Daily Limit", "Actions"]}
-              rows={categoryLimits.map((limit) => [
-                limit.category.name,
-                `${limit.dailyLimitMinutes} minutes`,
-                <button
-                  key="delete"
-                  className="text-sm text-red-600 hover:underline"
-                  onClick={() => handleDeleteLimit(limit.categoryId)}
-                >
-                  Remove
-                </button>,
-              ])}
-              emptyMessage="No category limits set for this device"
-            />
-          </div>
-
-          <div className="lg:sticky lg:top-4 lg:self-start">
-            <div className="rounded-lg border bg-slate-50 p-4">
-              <h3 className="text-sm font-semibold text-slate-900">Set Category Limit</h3>
-            <form className="mt-3 space-y-3" onSubmit={handleLimitSubmit}>
-              <div>
-                <label className="text-sm font-medium text-slate-700">Category</label>
-                <select
-                  className="mt-1 w-full rounded border px-3 py-2 text-sm"
-                  value={limitForm.categoryId}
-                  onChange={(e) => setLimitForm((p) => ({ ...p, categoryId: e.target.value }))}
-                  required
-                >
-                  <option value="">Select category...</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700">Daily limit (minutes)</label>
-                <input
-                  type="number"
-                  min={30}
-                  max={300}
-                  step={30}
-                  className="mt-1 w-full rounded border px-3 py-2 text-sm"
-                  value={limitForm.dailyLimitMinutes}
-                  onChange={(e) => setLimitForm((p) => ({ ...p, dailyLimitMinutes: Number(e.target.value) }))}
-                  required
-                />
-                <p className="mt-1 text-xs text-slate-500">30-300 minutes (30-minute intervals)</p>
-              </div>
-
-              <button
-                className="w-full rounded bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
-                disabled={loading || !selectedDevice}
-              >
-                {loading ? "Saving..." : "Set limit"}
-              </button>
-            </form>
-            </div>
           </div>
         </div>
       </div>

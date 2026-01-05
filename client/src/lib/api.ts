@@ -1,4 +1,4 @@
-import { ActiveFocusSession, App, AppCategory, CategoryLimit, DailyUsageSummary, Device, FocusSession, GoalProgress, GoalStatus, GoalType, HourlyUsage, Limit, OverrideRequest, OverrideStatus, PeakUsageHour, UsageGoal, UsageInsight, User, WeeklyUsageSummary } from "../types";
+import { ActiveFocusSession, App, AppCategory, DailyUsageSummary, Device, FocusSession, GoalProgress, GoalStatus, GoalType, HourlyUsage, Limit, OverrideRequest, OverrideStatus, PeakUsageHour, UsageGoal, UsageInsight, User, WeeklyUsageSummary } from "../types";
 
 // Ensure API_URL ends with /api, but handle cases where it might already include it
 const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -308,16 +308,10 @@ export const updateCategory = (
 export const deleteCategory = (token: string, id: string) =>
   apiRequest<void>(`/categories/${id}`, { token, method: "DELETE" });
 
-export const createCategoryLimit = (
+export const syncAppCategories = (
   token: string,
-  payload: { deviceId: string; categoryId: string; dailyLimitMinutes: number }
-) => apiRequest<{ limit: CategoryLimit }>("/categories/limits", { token, method: "POST", body: payload });
-
-export const getCategoryLimits = (token: string, deviceId: string) =>
-  apiRequest<{ limits: CategoryLimit[] }>(`/categories/limits/device/${deviceId}`, { token });
-
-export const deleteCategoryLimit = (token: string, deviceId: string, categoryId: string) =>
-  apiRequest<void>(`/categories/limits/device/${deviceId}/category/${categoryId}`, { token, method: "DELETE" });
+  payload: { deviceIdentifier: string; appCategories: Array<{ packageName: string; category: string }> }
+) => apiRequest<{ synced: number }>("/categories/sync-apps", { token, method: "POST", body: payload });
 
 // Override Requests API
 export const getOverrideRequests = (token: string, filters?: { deviceId?: string; status?: OverrideStatus }) => {

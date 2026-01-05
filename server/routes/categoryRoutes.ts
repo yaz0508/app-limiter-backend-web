@@ -113,5 +113,23 @@ router.delete(
   removeLimit
 );
 
+router.post(
+  "/sync-apps",
+  validateRequest(
+    z.object({
+      body: z.object({
+        deviceIdentifier: z.string().min(3),
+        appCategories: z.array(
+          z.object({
+            packageName: z.string().min(1),
+            category: z.string().min(1),
+          })
+        ),
+      }),
+    })
+  ),
+  syncApps
+);
+
 export default router;
 
