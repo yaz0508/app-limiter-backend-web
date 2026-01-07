@@ -3,6 +3,27 @@ import { prisma } from "../prisma/client";
 import { findOrCreateApp } from "./appService";
 import { findDeviceByIdentifier } from "./deviceService";
 
+const PH_OFFSET_MS = 8 * 60 * 60 * 1000; // Asia/Manila fixed UTC+8 (no DST)
+
+function phDayBounds(dateISO?: string): { start: Date; end: Date; dateKey: string } {
+    const dateKey = dateISO
+        ? dateISO
+        : new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const start = new Date(`${dateKey}T00:00:00.000+08:00`);
+    const end = new Date(`${dateKey}T23:59:59.999+08:00`);
+    return { start, end, dateKey };
+}
+
+function clipSecondsToRange(occurredAt: Date, durationSeconds: number, rangeStart: Date, rangeEnd: Date): number {
+    const endMs = occurredAt.getTime();
+    const durMs = Math.max(1, Math.round(durationSeconds)) * 1000;
+    const startMs = endMs - durMs;
+    const s = Math.max(startMs, rangeStart.getTime());
+    const e = Math.min(endMs, rangeEnd.getTime() + 1);
+    if (e <= s) return 0;
+    return Math.round((e - s) / 1000);
+}
+
 // Stub functions - implementations were removed
 export const ensureDeviceAccess = (
     deviceUserId: string,
@@ -15,12 +36,7 @@ export const ensureDeviceAccess = (
 };
 
 export const getDailySummary = async (deviceId: string, dateISO?: string) => {
-    const date = dateISO ? new Date(dateISO) : new Date();
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { start: startOfDay, end: endOfDay, dateKey } = phDayBounds(dateISO);
 
     // Get all usage logs for this device on this date
     const logs = await prisma.usageLog.findMany({
@@ -38,7 +54,7 @@ export const getDailySummary = async (deviceId: string, dateISO?: string) => {
 
     // Aggregate by app
     const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalSeconds: number; sessions: number }>();
-    
+
     for (const log of logs) {
         const key = log.appId;
         if (!appMap.has(key)) {
@@ -51,7 +67,7 @@ export const getDailySummary = async (deviceId: string, dateISO?: string) => {
             });
         }
         const entry = appMap.get(key)!;
-        entry.totalSeconds += log.durationSeconds;
+        entry.totalSeconds += clipSecondsToRange(log.occurredAt, log.durationSeconds, startOfDay, endOfDay);
         entry.sessions += 1;
     }
 
@@ -67,16 +83,17 @@ export const getDailySummary = async (deviceId: string, dateISO?: string) => {
     const totalSeconds = byApp.reduce((sum, app) => sum + app.totalSeconds, 0);
 
     return {
-        date: date.toISOString().split('T')[0],
+        date: dateKey,
         totalSeconds,
         byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
     };
 };
 
 export const getWeeklySummary = async (deviceId: string, startDateISO?: string) => {
-    const start = startDateISO ? new Date(startDateISO) : new Date();
-    start.setHours(0, 0, 0, 0);
-    
+    const startKey = startDateISO
+        ? startDateISO
+        : new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const start = new Date(`${startKey}T00:00:00.000+08:00`);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
     end.setHours(23, 59, 59, 999);
@@ -97,7 +114,7 @@ export const getWeeklySummary = async (deviceId: string, startDateISO?: string) 
 
     // Aggregate by app
     const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalSeconds: number; sessions: number }>();
-    
+
     for (const log of logs) {
         const key = log.appId;
         if (!appMap.has(key)) {
@@ -110,7 +127,7 @@ export const getWeeklySummary = async (deviceId: string, startDateISO?: string) 
             });
         }
         const entry = appMap.get(key)!;
-        entry.totalSeconds += log.durationSeconds;
+        entry.totalSeconds += clipSecondsToRange(log.occurredAt, log.durationSeconds, start, end);
         entry.sessions += 1;
     }
 
@@ -138,11 +155,8 @@ export const getCustomRangeSummary = async (
     startDateISO: string,
     endDateISO: string
 ) => {
-    const start = new Date(startDateISO);
-    start.setHours(0, 0, 0, 0);
-    
-    const end = new Date(endDateISO);
-    end.setHours(23, 59, 59, 999);
+    const start = new Date(`${startDateISO}T00:00:00.000+08:00`);
+    const end = new Date(`${endDateISO}T23:59:59.999+08:00`);
 
     // Get all usage logs for this device in the date range
     const logs = await prisma.usageLog.findMany({
@@ -160,7 +174,7 @@ export const getCustomRangeSummary = async (
 
     // Aggregate by app
     const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalSeconds: number; sessions: number }>();
-    
+
     for (const log of logs) {
         const key = log.appId;
         if (!appMap.has(key)) {
@@ -173,7 +187,7 @@ export const getCustomRangeSummary = async (
             });
         }
         const entry = appMap.get(key)!;
-        entry.totalSeconds += log.durationSeconds;
+        entry.totalSeconds += clipSecondsToRange(log.occurredAt, log.durationSeconds, start, end);
         entry.sessions += 1;
     }
 
@@ -197,10 +211,9 @@ export const getCustomRangeSummary = async (
 };
 
 export const getDailySeries = async (deviceId: string, days: number) => {
-    const endDate = new Date();
-    endDate.setHours(23, 59, 59, 999);
-    
-    const startDate = new Date();
+    const endKey = new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const endDate = new Date(`${endKey}T23:59:59.999+08:00`);
+    const startDate = new Date(endDate);
     startDate.setDate(startDate.getDate() - days);
     startDate.setHours(0, 0, 0, 0);
 
@@ -217,32 +230,34 @@ export const getDailySeries = async (deviceId: string, days: number) => {
 
     // Group by date
     const dateMap = new Map<string, { totalSeconds: number; sessions: number }>();
-    
+
     for (const log of logs) {
-        const dateKey = new Date(log.occurredAt).toISOString().split('T')[0];
+        const dateKey = new Date(new Date(log.occurredAt).getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
         if (!dateMap.has(dateKey)) {
             dateMap.set(dateKey, { totalSeconds: 0, sessions: 0 });
         }
         const entry = dateMap.get(dateKey)!;
-        entry.totalSeconds += log.durationSeconds;
+        // Best-effort: clip to this day window (prevents cross-midnight over-attribution in PH)
+        const { start, end } = phDayBounds(dateKey);
+        entry.totalSeconds += clipSecondsToRange(log.occurredAt, log.durationSeconds, start, end);
         entry.sessions += 1;
     }
 
     // Generate series for all days in range (including days with no data)
     const series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> = [];
     const currentDate = new Date(startDate);
-    
+
     while (currentDate <= endDate) {
-        const dateKey = currentDate.toISOString().split('T')[0];
+        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
         const entry = dateMap.get(dateKey) || { totalSeconds: 0, sessions: 0 };
-        
+
         series.push({
             date: dateKey,
             totalSeconds: entry.totalSeconds,
             totalMinutes: Math.round((entry.totalSeconds / 60) * 100) / 100,
             sessions: entry.sessions,
         });
-        
+
         currentDate.setDate(currentDate.getDate() + 1);
     }
 
@@ -274,6 +289,25 @@ export const ingestUsageLog = async (input: {
     const app = await findOrCreateApp(input.appPackage, input.appName);
 
     const occurredAt = input.occurredAt ?? new Date();
+
+    // De-dupe: Android can retry sync before marking local rows as synced.
+    // Treat logs as duplicates if same device+app and occurredAt within ±2s and same duration.
+    const dupWindowStart = new Date(occurredAt.getTime() - 2_000);
+    const dupWindowEnd = new Date(occurredAt.getTime() + 2_000);
+    const existing = await prisma.usageLog.findFirst({
+        where: {
+            deviceId: device.id,
+            appId: app.id,
+            durationSeconds: durationSeconds,
+            occurredAt: { gte: dupWindowStart, lte: dupWindowEnd },
+        },
+        select: { id: true },
+    });
+    if (existing) {
+        console.log(`[UsageService] Skipping duplicate usage log: device=${device.id}, app=${app.packageName}, duration=${durationSeconds}s, occurredAt=${occurredAt.toISOString()}`);
+        return existing;
+    }
+
     const log = await prisma.usageLog.create({
         data: {
             deviceId: device.id,
@@ -290,9 +324,10 @@ export const ingestUsageLog = async (input: {
 
 // Aggregated analytics across all devices
 export const getAggregatedWeeklySummary = async (requester: Express.UserPayload, startDateISO?: string) => {
-    const start = startDateISO ? new Date(startDateISO) : new Date();
-    start.setHours(0, 0, 0, 0);
-    
+    const startKey = startDateISO
+        ? startDateISO
+        : new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const start = new Date(`${startKey}T00:00:00.000+08:00`);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
     end.setHours(23, 59, 59, 999);
@@ -330,7 +365,7 @@ export const getAggregatedWeeklySummary = async (requester: Express.UserPayload,
 
     // Aggregate by app across all devices
     const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalSeconds: number; sessions: number }>();
-    
+
     for (const log of logs) {
         const key = log.appId;
         if (!appMap.has(key)) {
@@ -343,7 +378,7 @@ export const getAggregatedWeeklySummary = async (requester: Express.UserPayload,
             });
         }
         const entry = appMap.get(key)!;
-        entry.totalSeconds += log.durationSeconds;
+        entry.totalSeconds += clipSecondsToRange(log.occurredAt, log.durationSeconds, start, end);
         entry.sessions += 1;
     }
 
@@ -367,10 +402,9 @@ export const getAggregatedWeeklySummary = async (requester: Express.UserPayload,
 };
 
 export const getAggregatedDailySeries = async (requester: Express.UserPayload, days: number) => {
-    const endDate = new Date();
-    endDate.setHours(23, 59, 59, 999);
-    
-    const startDate = new Date();
+    const endKey = new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const endDate = new Date(`${endKey}T23:59:59.999+08:00`);
+    const startDate = new Date(endDate);
     startDate.setDate(startDate.getDate() - days);
     startDate.setHours(0, 0, 0, 0);
 
@@ -387,7 +421,7 @@ export const getAggregatedDailySeries = async (requester: Express.UserPayload, d
         const series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> = [];
         const currentDate = new Date(startDate);
         while (currentDate <= endDate) {
-            const dateKey = currentDate.toISOString().split('T')[0];
+            const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
             series.push({
                 date: dateKey,
                 totalSeconds: 0,
@@ -412,32 +446,33 @@ export const getAggregatedDailySeries = async (requester: Express.UserPayload, d
 
     // Group by date
     const dateMap = new Map<string, { totalSeconds: number; sessions: number }>();
-    
+
     for (const log of logs) {
-        const dateKey = new Date(log.occurredAt).toISOString().split('T')[0];
+        const dateKey = new Date(new Date(log.occurredAt).getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
         if (!dateMap.has(dateKey)) {
             dateMap.set(dateKey, { totalSeconds: 0, sessions: 0 });
         }
         const entry = dateMap.get(dateKey)!;
-        entry.totalSeconds += log.durationSeconds;
+        const { start, end } = phDayBounds(dateKey);
+        entry.totalSeconds += clipSecondsToRange(log.occurredAt, log.durationSeconds, start, end);
         entry.sessions += 1;
     }
 
     // Generate series for all days in range (including days with no data)
     const series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> = [];
     const currentDate = new Date(startDate);
-    
+
     while (currentDate <= endDate) {
-        const dateKey = currentDate.toISOString().split('T')[0];
+        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
         const entry = dateMap.get(dateKey) || { totalSeconds: 0, sessions: 0 };
-        
+
         series.push({
             date: dateKey,
             totalSeconds: entry.totalSeconds,
             totalMinutes: Math.round((entry.totalSeconds / 60) * 100) / 100,
             sessions: entry.sessions,
         });
-        
+
         currentDate.setDate(currentDate.getDate() + 1);
     }
 
@@ -449,11 +484,8 @@ export const getAggregatedCustomRangeSummary = async (
     startDateISO: string,
     endDateISO: string
 ) => {
-    const start = new Date(startDateISO);
-    start.setHours(0, 0, 0, 0);
-    
-    const end = new Date(endDateISO);
-    end.setHours(23, 59, 59, 999);
+    const start = new Date(`${startDateISO}T00:00:00.000+08:00`);
+    const end = new Date(`${endDateISO}T23:59:59.999+08:00`);
 
     // Get all devices the requester has access to
     const deviceWhere = requester.role === Role.ADMIN ? {} : { userId: requester.id };
@@ -488,7 +520,7 @@ export const getAggregatedCustomRangeSummary = async (
 
     // Aggregate by app across all devices
     const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalSeconds: number; sessions: number }>();
-    
+
     for (const log of logs) {
         const key = log.appId;
         if (!appMap.has(key)) {
@@ -501,7 +533,7 @@ export const getAggregatedCustomRangeSummary = async (
             });
         }
         const entry = appMap.get(key)!;
-        entry.totalSeconds += log.durationSeconds;
+        entry.totalSeconds += clipSecondsToRange(log.occurredAt, log.durationSeconds, start, end);
         entry.sessions += 1;
     }
 

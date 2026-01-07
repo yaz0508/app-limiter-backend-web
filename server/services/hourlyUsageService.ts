@@ -1,5 +1,22 @@
 import { prisma } from "../prisma/client";
 
+const PH_OFFSET_MS = 8 * 60 * 60 * 1000; // Asia/Manila is fixed UTC+8 (no DST)
+
+function phDayBoundsFromISODate(dateISO: string): { start: Date; end: Date } {
+  // Interpret dateISO as a calendar date in PH timezone.
+  const start = new Date(`${dateISO}T00:00:00.000+08:00`);
+  const end = new Date(`${dateISO}T23:59:59.999+08:00`);
+  return { start, end };
+}
+
+function phDateKeyFromMs(ms: number): string {
+  return new Date(ms + PH_OFFSET_MS).toISOString().slice(0, 10); // YYYY-MM-DD in PH
+}
+
+function phHourFromMs(ms: number): number {
+  return new Date(ms + PH_OFFSET_MS).getUTCHours(); // 0-23 in PH
+}
+
 export interface HourlyUsage {
   hour: number; // 0-23
   totalMinutes: number;
@@ -25,13 +42,7 @@ export const getHourlyUsage = async (
   deviceId: string,
   dateISO: string
 ): Promise<HourlyUsage[]> => {
-  // Parse the date and create start/end boundaries
-  const date = new Date(dateISO);
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
+  const { start: startOfDay, end: endOfDay } = phDayBoundsFromISODate(dateISO);
 
   // Get all usage logs for this device on this date
   const logs = await prisma.usageLog.findMany({
@@ -53,14 +64,33 @@ export const getHourlyUsage = async (
     hourlyData[hour] = { totalMinutes: 0, apps: new Set() };
   }
 
-  // Group logs by hour
+  // Split each log across hour boundaries based on inferred start/end.
+  // We only store occurredAt (end) + durationSeconds, so we reconstruct start = end - duration.
   for (const log of logs) {
-    const logDate = new Date(log.occurredAt);
-    const hour = logDate.getHours();
-    const minutes = log.durationSeconds / 60;
+    const endMs = new Date(log.occurredAt).getTime();
+    const durationMs = Math.max(1, log.durationSeconds) * 1000;
+    const startMs = endMs - durationMs;
 
-    hourlyData[hour].totalMinutes += minutes;
-    hourlyData[hour].apps.add(log.appId);
+    // Clip to requested day bounds (PH day window expressed in UTC ms)
+    const dayStartMs = startOfDay.getTime();
+    const dayEndMsExclusive = endOfDay.getTime() + 1;
+    let cursor = Math.max(startMs, dayStartMs);
+    const end = Math.min(endMs, dayEndMsExclusive);
+    if (end <= cursor) continue;
+
+    while (cursor < end) {
+      const hour = phHourFromMs(cursor);
+      // next hour boundary in PH time
+      const phCursor = cursor + PH_OFFSET_MS;
+      const nextHourStartUtcMs =
+        (Math.floor(phCursor / 3_600_000) + 1) * 3_600_000 - PH_OFFSET_MS;
+      const chunkEnd = Math.min(end, nextHourStartUtcMs);
+      const minutes = (chunkEnd - cursor) / 60_000;
+
+      hourlyData[hour].totalMinutes += minutes;
+      hourlyData[hour].apps.add(log.appId);
+      cursor = chunkEnd;
+    }
   }
 
   // Convert to array format
@@ -84,11 +114,9 @@ export const getDailyHourlyUsage = async (
   startISO: string,
   endISO: string
 ): Promise<DailyHourlyUsage[]> => {
-  const startDate = new Date(startISO);
-  startDate.setHours(0, 0, 0, 0);
-  
-  const endDate = new Date(endISO);
-  endDate.setHours(23, 59, 59, 999);
+  // Interpret range as PH dates (inclusive)
+  const startDate = new Date(`${startISO}T00:00:00.000+08:00`);
+  const endDate = new Date(`${endISO}T23:59:59.999+08:00`);
 
   // Get all usage logs in the date range
   const logs = await prisma.usageLog.findMany({
@@ -108,20 +136,38 @@ export const getDailyHourlyUsage = async (
   const dailyData: Record<string, Record<number, { totalMinutes: number; apps: Set<string> }>> = {};
 
   for (const log of logs) {
-    const logDate = new Date(log.occurredAt);
-    const dateKey = logDate.toISOString().split('T')[0]; // YYYY-MM-DD
-    const hour = logDate.getHours();
-    const minutes = log.durationSeconds / 60;
+    const endMs = new Date(log.occurredAt).getTime();
+    const durationMs = Math.max(1, log.durationSeconds) * 1000;
+    const startMs = endMs - durationMs;
 
-    if (!dailyData[dateKey]) {
-      dailyData[dateKey] = {};
-      for (let h = 0; h < 24; h++) {
-        dailyData[dateKey][h] = { totalMinutes: 0, apps: new Set() };
+    // Clip to overall range
+    const rangeStartMs = startDate.getTime();
+    const rangeEndMsExclusive = endDate.getTime() + 1;
+    let cursor = Math.max(startMs, rangeStartMs);
+    const end = Math.min(endMs, rangeEndMsExclusive);
+    if (end <= cursor) continue;
+
+    while (cursor < end) {
+      const dateKey = phDateKeyFromMs(cursor);
+      const hour = phHourFromMs(cursor);
+
+      if (!dailyData[dateKey]) {
+        dailyData[dateKey] = {};
+        for (let h = 0; h < 24; h++) {
+          dailyData[dateKey][h] = { totalMinutes: 0, apps: new Set() };
+        }
       }
-    }
 
-    dailyData[dateKey][hour].totalMinutes += minutes;
-    dailyData[dateKey][hour].apps.add(log.appId);
+      const phCursor = cursor + PH_OFFSET_MS;
+      const nextHourStartUtcMs =
+        (Math.floor(phCursor / 3_600_000) + 1) * 3_600_000 - PH_OFFSET_MS;
+      const chunkEnd = Math.min(end, nextHourStartUtcMs);
+      const minutes = (chunkEnd - cursor) / 60_000;
+
+      dailyData[dateKey][hour].totalMinutes += minutes;
+      dailyData[dateKey][hour].apps.add(log.appId);
+      cursor = chunkEnd;
+    }
   }
 
   // Convert to array format
@@ -189,13 +235,31 @@ export const getPeakUsageHours = async (
   }
 
   for (const log of logs) {
-    const logDate = new Date(log.occurredAt);
-    const hour = logDate.getHours();
-    const dateKey = logDate.toISOString().split('T')[0];
-    const minutes = log.durationSeconds / 60;
+    const endMs = new Date(log.occurredAt).getTime();
+    const durationMs = Math.max(1, log.durationSeconds) * 1000;
+    const startMs = endMs - durationMs;
 
-    hourlyStats[hour].totalMinutes += minutes;
-    hourlyStats[hour].days.add(dateKey);
+    // Clip to requested range (in UTC ms); we attribute by PH buckets though.
+    const rangeStartMs = startDate.getTime();
+    const rangeEndMsExclusive = endDate.getTime() + 1;
+    let cursor = Math.max(startMs, rangeStartMs);
+    const end = Math.min(endMs, rangeEndMsExclusive);
+    if (end <= cursor) continue;
+
+    while (cursor < end) {
+      const hour = phHourFromMs(cursor);
+      const dateKey = phDateKeyFromMs(cursor);
+
+      const phCursor = cursor + PH_OFFSET_MS;
+      const nextHourStartUtcMs =
+        (Math.floor(phCursor / 3_600_000) + 1) * 3_600_000 - PH_OFFSET_MS;
+      const chunkEnd = Math.min(end, nextHourStartUtcMs);
+      const minutes = (chunkEnd - cursor) / 60_000;
+
+      hourlyStats[hour].totalMinutes += minutes;
+      hourlyStats[hour].days.add(dateKey);
+      cursor = chunkEnd;
+    }
   }
 
   // Calculate averages and convert to array
