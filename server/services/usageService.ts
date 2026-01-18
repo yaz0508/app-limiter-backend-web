@@ -14,6 +14,13 @@ function phDayBounds(dateISO?: string): { start: Date; end: Date; dateKey: strin
     return { start, end, dateKey };
 }
 
+function normalizePhDateKey(dateISO?: string): string {
+    if (dateISO && /^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
+        return dateISO;
+    }
+    return new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function clipSecondsToRange(occurredAt: Date, durationSeconds: number, rangeStart: Date, rangeEnd: Date): number {
     const endMs = occurredAt.getTime();
     const durMs = Math.max(1, Math.round(durationSeconds)) * 1000;
@@ -269,7 +276,8 @@ export const ingestUsageLog = async (input: {
     appPackage: string;
     appName?: string;
     durationSeconds: number;
-    occurredAt?: Date;
+    occurredAt?: Date | string;
+    eventId?: string;
 }): Promise<any> => {
     // Basic validation
     let durationSeconds = Math.round(input.durationSeconds);
@@ -288,7 +296,25 @@ export const ingestUsageLog = async (input: {
 
     const app = await findOrCreateApp(input.appPackage, input.appName);
 
-    const occurredAt = input.occurredAt ?? new Date();
+    const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
+    if (Number.isNaN(occurredAt.getTime())) {
+        throw new Error("Invalid occurredAt");
+    }
+
+    const eventId = input.eventId?.trim();
+    if (eventId) {
+        const existingByEvent = await prisma.usageLog.findFirst({
+            where: {
+                deviceId: device.id,
+                eventId,
+            },
+            select: { id: true },
+        });
+        if (existingByEvent) {
+            console.log(`[UsageService] Skipping duplicate usage log (eventId): device=${device.id}, app=${app.packageName}, eventId=${eventId}`);
+            return existingByEvent;
+        }
+    }
 
     // De-dupe: Android can retry sync before marking local rows as synced.
     // Treat logs as duplicates if same device+app and occurredAt within ±2s and same duration.
@@ -315,6 +341,7 @@ export const ingestUsageLog = async (input: {
             userId: device.userId,
             durationSeconds: durationSeconds,
             occurredAt: occurredAt,
+            eventId: eventId,
         },
     });
 
@@ -504,7 +531,7 @@ export const getAggregatedCustomRangeSummary = async (
         };
     }
 
-    // Get all usage logs across all devices
+    // Get all usage logs across all devices in the date range
     const logs = await prisma.usageLog.findMany({
         where: {
             deviceId: { in: deviceIds },
@@ -554,4 +581,593 @@ export const getAggregatedCustomRangeSummary = async (
         totalSeconds,
         byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
     };
+};
+
+/**
+ * Ingest daily usage snapshot from Android's queryUsageStats()
+ * This is the source of truth for daily totals - same as Digital Wellbeing
+ */
+export const ingestDailyUsageSnapshot = async (input: {
+    deviceIdentifier: string;
+    date: string; // YYYY-MM-DD in PH timezone
+    apps: Array<{
+        packageName: string;
+        appName?: string;
+        totalMinutes: number;
+    }>;
+}): Promise<{ synced: number; date: string }> => {
+    const device = await findDeviceByIdentifier(input.deviceIdentifier);
+    if (!device) {
+        throw new Error("DeviceNotRegistered");
+    }
+
+    const dateKey = normalizePhDateKey(input.date);
+    let syncedCount = 0;
+
+    for (const appData of input.apps) {
+        const totalMinutes = Math.min(24 * 60, Math.max(0, Math.round(appData.totalMinutes)));
+        if (totalMinutes <= 0) continue; // Skip apps with no usage
+
+        const app = await findOrCreateApp(appData.packageName, appData.appName);
+
+        // Upsert the snapshot (update if exists, create if not)
+        await prisma.dailyUsageSnapshot.upsert({
+            where: {
+                deviceId_appId_date: {
+                    deviceId: device.id,
+                    appId: app.id,
+                    date: dateKey,
+                },
+            },
+            update: {
+                totalMinutes: totalMinutes,
+                syncedAt: new Date(),
+            },
+            create: {
+                deviceId: device.id,
+                appId: app.id,
+                date: dateKey,
+                totalMinutes: totalMinutes,
+                source: "queryUsageStats",
+            },
+        });
+        syncedCount++;
+    }
+
+    console.log(`[UsageService] Synced ${syncedCount} daily usage snapshot(s) for device ${device.id} on ${dateKey}`);
+    return { synced: syncedCount, date: dateKey };
+};
+
+/**
+ * Get daily summary using accurate snapshots (from queryUsageStats) if available,
+ * falling back to session-based calculation if not
+ */
+export const getDailySummaryAccurate = async (deviceId: string, dateISO?: string) => {
+    const { start: startOfDay, end: endOfDay, dateKey } = phDayBounds(dateISO);
+
+    // First, try to get snapshots (accurate data from queryUsageStats)
+    const snapshots = await prisma.dailyUsageSnapshot.findMany({
+        where: {
+            deviceId,
+            date: dateKey,
+        },
+        include: {
+            app: true,
+        },
+    });
+
+    if (snapshots.length > 0) {
+        // Use accurate snapshot data
+        const byApp = snapshots.map(snapshot => ({
+            appId: snapshot.appId,
+            appName: snapshot.app.name,
+            packageName: snapshot.app.packageName,
+            totalMinutes: snapshot.totalMinutes,
+            totalSeconds: snapshot.totalMinutes * 60,
+            sessions: 0, // Sessions not tracked in snapshots
+            source: "queryUsageStats" as const,
+        }));
+
+        const totalSeconds = byApp.reduce((sum, app) => sum + app.totalSeconds, 0);
+
+        return {
+            date: dateKey,
+            totalSeconds,
+            byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
+            source: "queryUsageStats", // Indicate data source
+        };
+    }
+
+    // Fallback to session-based calculation
+    const sessionBased = await getDailySummary(deviceId, dateISO);
+    return {
+        ...sessionBased,
+        source: "sessions", // Indicate data source
+    };
+};
+
+/**
+ * Get weekly summary using accurate snapshots (from queryUsageStats) if available,
+ * falling back to session-based calculation if not
+ */
+export const getWeeklySummaryAccurate = async (deviceId: string, startDateISO?: string) => {
+    const startKey = startDateISO
+        ? startDateISO
+        : new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const start = new Date(`${startKey}T00:00:00.000+08:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    end.setHours(23, 59, 59, 999);
+
+    // Generate all date keys in the range
+    const dateKeys: string[] = [];
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+        dateKeys.push(dateKey);
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Get all snapshots for this device in the date range
+    const snapshots = await prisma.dailyUsageSnapshot.findMany({
+        where: {
+            deviceId,
+            date: { in: dateKeys },
+        },
+        include: {
+            app: true,
+        },
+    });
+
+    if (snapshots.length > 0) {
+        // Use accurate snapshot data - aggregate by app across all days
+        const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalMinutes: number }>();
+
+        for (const snapshot of snapshots) {
+            const key = snapshot.appId;
+            if (!appMap.has(key)) {
+                appMap.set(key, {
+                    appId: snapshot.appId,
+                    appName: snapshot.app.name,
+                    packageName: snapshot.app.packageName,
+                    totalMinutes: 0,
+                });
+            }
+            const entry = appMap.get(key)!;
+            entry.totalMinutes += snapshot.totalMinutes;
+        }
+
+        const byApp = Array.from(appMap.values()).map(entry => ({
+            appId: entry.appId,
+            appName: entry.appName,
+            packageName: entry.packageName,
+            totalMinutes: entry.totalMinutes,
+            totalSeconds: entry.totalMinutes * 60,
+            sessions: 0, // Sessions not tracked in snapshots
+            source: "queryUsageStats" as const,
+        }));
+
+        const totalSeconds = byApp.reduce((sum, app) => sum + app.totalSeconds, 0);
+
+        return {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            totalSeconds,
+            byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
+            source: "queryUsageStats",
+        };
+    }
+
+    // Fallback to session-based calculation
+    const sessionBased = await getWeeklySummary(deviceId, startDateISO);
+    return {
+        ...sessionBased,
+        source: "sessions",
+    };
+};
+
+/**
+ * Get custom range summary using accurate snapshots (from queryUsageStats) if available,
+ * falling back to session-based calculation if not
+ */
+export const getCustomRangeSummaryAccurate = async (
+    deviceId: string,
+    startDateISO: string,
+    endDateISO: string
+) => {
+    const start = new Date(`${startDateISO}T00:00:00.000+08:00`);
+    const end = new Date(`${endDateISO}T23:59:59.999+08:00`);
+
+    // Generate all date keys in the range
+    const dateKeys: string[] = [];
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+        dateKeys.push(dateKey);
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Get all snapshots for this device in the date range
+    const snapshots = await prisma.dailyUsageSnapshot.findMany({
+        where: {
+            deviceId,
+            date: { in: dateKeys },
+        },
+        include: {
+            app: true,
+        },
+    });
+
+    if (snapshots.length > 0) {
+        // Use accurate snapshot data - aggregate by app across all days
+        const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalMinutes: number }>();
+
+        for (const snapshot of snapshots) {
+            const key = snapshot.appId;
+            if (!appMap.has(key)) {
+                appMap.set(key, {
+                    appId: snapshot.appId,
+                    appName: snapshot.app.name,
+                    packageName: snapshot.app.packageName,
+                    totalMinutes: 0,
+                });
+            }
+            const entry = appMap.get(key)!;
+            entry.totalMinutes += snapshot.totalMinutes;
+        }
+
+        const byApp = Array.from(appMap.values()).map(entry => ({
+            appId: entry.appId,
+            appName: entry.appName,
+            packageName: entry.packageName,
+            totalMinutes: entry.totalMinutes,
+            totalSeconds: entry.totalMinutes * 60,
+            sessions: 0, // Sessions not tracked in snapshots
+            source: "queryUsageStats" as const,
+        }));
+
+        const totalSeconds = byApp.reduce((sum, app) => sum + app.totalSeconds, 0);
+
+        return {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            totalSeconds,
+            byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
+            source: "queryUsageStats",
+        };
+    }
+
+    // Fallback to session-based calculation
+    const sessionBased = await getCustomRangeSummary(deviceId, startDateISO, endDateISO);
+    return {
+        ...sessionBased,
+        source: "sessions",
+    };
+};
+
+/**
+ * Get daily series using accurate snapshots (from queryUsageStats) if available,
+ * falling back to session-based calculation if not
+ */
+export const getDailySeriesAccurate = async (deviceId: string, days: number) => {
+    const endKey = new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const endDate = new Date(`${endKey}T23:59:59.999+08:00`);
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Generate all date keys in the range
+    const dateKeys: string[] = [];
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+        dateKeys.push(dateKey);
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Get all snapshots for this device in the date range
+    const snapshots = await prisma.dailyUsageSnapshot.findMany({
+        where: {
+            deviceId,
+            date: { in: dateKeys },
+        },
+    });
+
+    // Group by date
+    const dateMap = new Map<string, { totalMinutes: number }>();
+
+    for (const snapshot of snapshots) {
+        const dateKey = snapshot.date;
+        if (!dateMap.has(dateKey)) {
+            dateMap.set(dateKey, { totalMinutes: 0 });
+        }
+        const entry = dateMap.get(dateKey)!;
+        entry.totalMinutes += snapshot.totalMinutes;
+    }
+
+    // Generate series for all days in range (including days with no data)
+    const series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> = [];
+    const currentDate2 = new Date(startDate);
+
+    while (currentDate2 <= endDate) {
+        const dateKey = new Date(currentDate2.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+        const entry = dateMap.get(dateKey) || { totalMinutes: 0 };
+
+        series.push({
+            date: dateKey,
+            totalSeconds: entry.totalMinutes * 60,
+            totalMinutes: entry.totalMinutes,
+            sessions: 0, // Sessions not tracked in snapshots
+        });
+
+        currentDate2.setDate(currentDate2.getDate() + 1);
+    }
+
+    return series;
+};
+
+/**
+ * Get aggregated weekly summary using accurate snapshots (from queryUsageStats) if available,
+ * falling back to session-based calculation if not
+ */
+export const getAggregatedWeeklySummaryAccurate = async (requester: Express.UserPayload, startDateISO?: string) => {
+    const startKey = startDateISO
+        ? startDateISO
+        : new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const start = new Date(`${startKey}T00:00:00.000+08:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    end.setHours(23, 59, 59, 999);
+
+    // Get all devices the requester has access to
+    const deviceWhere = requester.role === Role.ADMIN ? {} : { userId: requester.id };
+    const devices = await prisma.device.findMany({
+        where: deviceWhere,
+        select: { id: true },
+    });
+    const deviceIds = devices.map(d => d.id);
+
+    if (deviceIds.length === 0) {
+        return {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            totalSeconds: 0,
+            byApp: [],
+        };
+    }
+
+    // Generate all date keys in the range
+    const dateKeys: string[] = [];
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+        dateKeys.push(dateKey);
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Get all snapshots across all devices in the date range
+    const snapshots = await prisma.dailyUsageSnapshot.findMany({
+        where: {
+            deviceId: { in: deviceIds },
+            date: { in: dateKeys },
+        },
+        include: {
+            app: true,
+        },
+    });
+
+    if (snapshots.length > 0) {
+        // Aggregate by app across all devices
+        const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalMinutes: number }>();
+
+        for (const snapshot of snapshots) {
+            const key = snapshot.appId;
+            if (!appMap.has(key)) {
+                appMap.set(key, {
+                    appId: snapshot.appId,
+                    appName: snapshot.app.name,
+                    packageName: snapshot.app.packageName,
+                    totalMinutes: 0,
+                });
+            }
+            const entry = appMap.get(key)!;
+            entry.totalMinutes += snapshot.totalMinutes;
+        }
+
+        const byApp = Array.from(appMap.values()).map(entry => ({
+            appId: entry.appId,
+            appName: entry.appName,
+            packageName: entry.packageName,
+            totalMinutes: entry.totalMinutes,
+            totalSeconds: entry.totalMinutes * 60,
+            sessions: 0, // Sessions not tracked in snapshots
+            source: "queryUsageStats" as const,
+        }));
+
+        const totalSeconds = byApp.reduce((sum, app) => sum + app.totalSeconds, 0);
+
+        return {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            totalSeconds,
+            byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
+            source: "queryUsageStats",
+        };
+    }
+
+    // Fallback to session-based calculation
+    const sessionBased = await getAggregatedWeeklySummary(requester, startDateISO);
+    return {
+        ...sessionBased,
+        source: "sessions",
+    };
+};
+
+/**
+ * Get aggregated custom range summary using accurate snapshots (from queryUsageStats) if available,
+ * falling back to session-based calculation if not
+ */
+export const getAggregatedCustomRangeSummaryAccurate = async (
+    requester: Express.UserPayload,
+    startDateISO: string,
+    endDateISO: string
+) => {
+    const start = new Date(`${startDateISO}T00:00:00.000+08:00`);
+    const end = new Date(`${endDateISO}T23:59:59.999+08:00`);
+
+    // Get all devices the requester has access to
+    const deviceWhere = requester.role === Role.ADMIN ? {} : { userId: requester.id };
+    const devices = await prisma.device.findMany({
+        where: deviceWhere,
+        select: { id: true },
+    });
+    const deviceIds = devices.map(d => d.id);
+
+    if (deviceIds.length === 0) {
+        return {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            totalSeconds: 0,
+            byApp: [],
+        };
+    }
+
+    // Generate all date keys in the range
+    const dateKeys: string[] = [];
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+        dateKeys.push(dateKey);
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Get all snapshots across all devices in the date range
+    const snapshots = await prisma.dailyUsageSnapshot.findMany({
+        where: {
+            deviceId: { in: deviceIds },
+            date: { in: dateKeys },
+        },
+        include: {
+            app: true,
+        },
+    });
+
+    if (snapshots.length > 0) {
+        // Aggregate by app across all devices
+        const appMap = new Map<string, { appId: string; appName: string; packageName: string; totalMinutes: number }>();
+
+        for (const snapshot of snapshots) {
+            const key = snapshot.appId;
+            if (!appMap.has(key)) {
+                appMap.set(key, {
+                    appId: snapshot.appId,
+                    appName: snapshot.app.name,
+                    packageName: snapshot.app.packageName,
+                    totalMinutes: 0,
+                });
+            }
+            const entry = appMap.get(key)!;
+            entry.totalMinutes += snapshot.totalMinutes;
+        }
+
+        const byApp = Array.from(appMap.values()).map(entry => ({
+            appId: entry.appId,
+            appName: entry.appName,
+            packageName: entry.packageName,
+            totalMinutes: entry.totalMinutes,
+            totalSeconds: entry.totalMinutes * 60,
+            sessions: 0, // Sessions not tracked in snapshots
+            source: "queryUsageStats" as const,
+        }));
+
+        const totalSeconds = byApp.reduce((sum, app) => sum + app.totalSeconds, 0);
+
+        return {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            totalSeconds,
+            byApp: byApp.sort((a, b) => b.totalSeconds - a.totalSeconds),
+            source: "queryUsageStats",
+        };
+    }
+
+    // Fallback to session-based calculation
+    const sessionBased = await getAggregatedCustomRangeSummary(requester, startDateISO, endDateISO);
+    return {
+        ...sessionBased,
+        source: "sessions",
+    };
+};
+
+/**
+ * Get aggregated daily series using accurate snapshots (from queryUsageStats) if available,
+ * falling back to session-based calculation if not
+ */
+export const getAggregatedDailySeriesAccurate = async (requester: Express.UserPayload, days: number) => {
+    const endKey = new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const endDate = new Date(`${endKey}T23:59:59.999+08:00`);
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Get all devices the requester has access to
+    const deviceWhere = requester.role === Role.ADMIN ? {} : { userId: requester.id };
+    const devices = await prisma.device.findMany({
+        where: deviceWhere,
+        select: { id: true },
+    });
+    const deviceIds = devices.map(d => d.id);
+
+    if (deviceIds.length === 0) {
+        return [];
+    }
+
+    // Generate all date keys in the range
+    const dateKeys: string[] = [];
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+        dateKeys.push(dateKey);
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Get all snapshots across all devices in the date range
+    const snapshots = await prisma.dailyUsageSnapshot.findMany({
+        where: {
+            deviceId: { in: deviceIds },
+            date: { in: dateKeys },
+        },
+    });
+
+    // Group by date
+    const dateMap = new Map<string, { totalMinutes: number }>();
+
+    for (const snapshot of snapshots) {
+        const dateKey = snapshot.date;
+        if (!dateMap.has(dateKey)) {
+            dateMap.set(dateKey, { totalMinutes: 0 });
+        }
+        const entry = dateMap.get(dateKey)!;
+        entry.totalMinutes += snapshot.totalMinutes;
+    }
+
+    // Generate series for all days in range (including days with no data)
+    const series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> = [];
+    const currentDate2 = new Date(startDate);
+
+    while (currentDate2 <= endDate) {
+        const dateKey = new Date(currentDate2.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+        const entry = dateMap.get(dateKey) || { totalMinutes: 0 };
+
+        series.push({
+            date: dateKey,
+            totalSeconds: entry.totalMinutes * 60,
+            totalMinutes: entry.totalMinutes,
+            sessions: 0, // Sessions not tracked in snapshots
+        });
+
+        currentDate2.setDate(currentDate2.getDate() + 1);
+    }
+
+    return series;
 };

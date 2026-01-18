@@ -207,10 +207,10 @@ export const getPeakUsageHours = async (
   deviceId: string,
   days: number = 7
 ): Promise<PeakUsageHour[]> => {
-  const endDate = new Date();
-  endDate.setHours(23, 59, 59, 999);
+  const endKey = new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+  const endDate = new Date(`${endKey}T23:59:59.999+08:00`);
   
-  const startDate = new Date();
+  const startDate = new Date(endDate);
   startDate.setDate(startDate.getDate() - days);
   startDate.setHours(0, 0, 0, 0);
 

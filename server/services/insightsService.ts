@@ -1,6 +1,8 @@
 import { prisma } from "../prisma/client";
 import { getAllGoalProgress } from "./goalService";
 
+const PH_OFFSET_MS = 8 * 60 * 60 * 1000; // Asia/Manila fixed UTC+8 (no DST)
+
 export interface InsightAction {
   label: string;
   type: "set_limit" | "create_goal" | "create_session" | "view_details" | "view_analytics";
@@ -19,9 +21,11 @@ export interface UsageInsight {
 
 export const getUsageInsights = async (deviceId: string, days: number = 30): Promise<UsageInsight[]> => {
   const insights: UsageInsight[] = [];
-  const endDate = new Date();
-  const startDate = new Date();
+  const endKey = new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+  const endDate = new Date(`${endKey}T23:59:59.999+08:00`);
+  const startDate = new Date(endDate);
   startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
 
   // Get usage logs for the period
   const logs = await prisma.usageLog.findMany({
@@ -49,7 +53,7 @@ export const getUsageInsights = async (deviceId: string, days: number = 30): Pro
   const appTotalUsage: Record<string, number> = {};
 
   for (const log of logs) {
-    const dayOfWeek = new Date(log.occurredAt).getDay(); // 0 = Sunday, 6 = Saturday
+    const dayOfWeek = new Date(log.occurredAt.getTime() + PH_OFFSET_MS).getUTCDay(); // 0 = Sunday, 6 = Saturday (PH)
     const appId = log.appId;
     const minutes = log.durationSeconds / 60;
 
@@ -106,13 +110,16 @@ export const getUsageInsights = async (deviceId: string, days: number = 30): Pro
   // Trend Detection: Compare recent weeks
   const weekCount = Math.floor(days / 7);
   if (weekCount >= 2) {
-    const recentWeekStart = new Date();
+    const recentWeekStart = new Date(endDate);
     recentWeekStart.setDate(recentWeekStart.getDate() - 7);
+    recentWeekStart.setHours(0, 0, 0, 0);
 
-    const previousWeekStart = new Date();
+    const previousWeekStart = new Date(endDate);
     previousWeekStart.setDate(previousWeekStart.getDate() - 14);
-    const previousWeekEnd = new Date();
+    previousWeekStart.setHours(0, 0, 0, 0);
+    const previousWeekEnd = new Date(endDate);
     previousWeekEnd.setDate(previousWeekEnd.getDate() - 7);
+    previousWeekEnd.setHours(23, 59, 59, 999);
 
     const recentLogs = logs.filter(l => l.occurredAt >= recentWeekStart);
     const previousLogs = logs.filter(
@@ -174,13 +181,15 @@ export const getUsageInsights = async (deviceId: string, days: number = 30): Pro
 
   // Prediction: Based on current week's usage
   if (weekCount >= 1) {
-    const currentWeekStart = new Date();
-    currentWeekStart.setDate(currentWeekStart.getDate() - (new Date().getDay()));
+    const endDayOfWeek = new Date(endDate.getTime() + PH_OFFSET_MS).getUTCDay();
+    const currentWeekStart = new Date(endDate);
+    currentWeekStart.setDate(currentWeekStart.getDate() - endDayOfWeek);
+    currentWeekStart.setHours(0, 0, 0, 0);
     currentWeekStart.setHours(0, 0, 0, 0);
 
     const currentWeekLogs = logs.filter(l => l.occurredAt >= currentWeekStart);
     const currentWeekTotal = currentWeekLogs.reduce((sum, l) => sum + l.durationSeconds, 0) / 60;
-    const daysInWeek = new Date().getDay() + 1; // Days elapsed this week
+    const daysInWeek = endDayOfWeek + 1; // Days elapsed this week (PH)
     const projectedWeekly = (currentWeekTotal / daysInWeek) * 7;
 
     if (projectedWeekly > 0) {

@@ -40,6 +40,7 @@ model Device {
   categoryLimits   CategoryLimit[]
   overrideRequests OverrideRequest[]
   usageLogs        UsageLog[]
+  dailyUsageSnapshots DailyUsageSnapshot[]
   focusSessions    FocusSession[]
   activeFocusSession ActiveFocusSession?
   goals            UsageGoal[]
@@ -57,6 +58,7 @@ model App {
   categoryApps  CategoryApp[]
   overrideRequests OverrideRequest[]
   usageLogs     UsageLog[]
+  dailyUsageSnapshots DailyUsageSnapshot[]
   goals         UsageGoal[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -87,14 +89,36 @@ model UsageLog {
   appId           String    @db.ObjectId
   user            User?     @relation("UserUsageLogs", fields: [userId], references: [id])
   userId          String?   @db.ObjectId
+  eventId         String?   // Optional client-provided id for idempotent ingestion
   durationSeconds Int
   occurredAt      DateTime
   createdAt       DateTime  @default(now())
 
   @@index([deviceId, occurredAt])
   @@index([appId, occurredAt])
+  @@index([deviceId, appId, occurredAt])
+  @@index([deviceId, eventId])
   @@index([occurredAt]) // For date range queries
   @@index([userId, occurredAt]) // For user-specific queries
+}
+
+// Daily usage snapshot from Android's queryUsageStats() - same as Digital Wellbeing
+// This is the source of truth for daily usage totals, more accurate than session logs
+model DailyUsageSnapshot {
+  id              String    @id @map("_id") @default(auto()) @db.ObjectId
+  device          Device    @relation(fields: [deviceId], references: [id])
+  deviceId        String    @db.ObjectId
+  app             App       @relation(fields: [appId], references: [id])
+  appId           String    @db.ObjectId
+  date            String    // ISO date string (YYYY-MM-DD) in PH timezone
+  totalMinutes    Int       // Total foreground minutes for this app on this date
+  source          String    @default("queryUsageStats") // "queryUsageStats" = Digital Wellbeing accurate
+  syncedAt        DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([deviceId, appId, date]) // One snapshot per device/app/date
+  @@index([deviceId, date])
+  @@index([date])
 }
 
 model FocusSession {
