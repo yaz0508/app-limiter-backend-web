@@ -3,13 +3,21 @@ import { prisma } from "../prisma/client";
 import {
   ensureDeviceAccess,
   getCustomRangeSummary,
+  getCustomRangeSummaryAccurate,
   getDailySeries,
+  getDailySeriesAccurate,
   getDailySummary,
+  getDailySummaryAccurate,
   getWeeklySummary,
+  getWeeklySummaryAccurate,
   ingestUsageLog,
+  ingestDailyUsageSnapshot,
   getAggregatedWeeklySummary,
+  getAggregatedWeeklySummaryAccurate,
   getAggregatedDailySeries,
+  getAggregatedDailySeriesAccurate,
   getAggregatedCustomRangeSummary,
+  getAggregatedCustomRangeSummaryAccurate,
 } from "../services/usageService";
 
 export const ingest = async (req: Request, res: Response) => {
@@ -35,6 +43,32 @@ export const ingest = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Ingest daily usage snapshot from Android's queryUsageStats()
+ * This provides accurate daily totals (same as Digital Wellbeing)
+ */
+export const ingestDailySnapshot = async (req: Request, res: Response) => {
+  try {
+    console.log(`[UsageController] Ingesting daily usage snapshot:`, {
+      deviceIdentifier: req.body.deviceIdentifier,
+      date: req.body.date,
+      appCount: req.body.apps?.length || 0,
+      authenticated: !!req.user
+    });
+
+    const result = await ingestDailyUsageSnapshot(req.body);
+    console.log(`[UsageController] Successfully synced ${result.synced} app(s) for ${result.date}`);
+    res.status(201).json(result);
+  } catch (err) {
+    const msg = (err as Error).message;
+    console.error(`[UsageController] Error ingesting daily snapshot:`, err);
+    if (msg === "DeviceNotRegistered") {
+      return res.status(400).json({ message: "Device not registered" });
+    }
+    throw err;
+  }
+};
+
 export const dailySummary = async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.params;
@@ -43,11 +77,13 @@ export const dailySummary = async (req: Request, res: Response) => {
     if (!device) return res.status(404).json({ message: "Device not found" });
     ensureDeviceAccess(device.userId, req.user!);
 
-    const summary = await getDailySummary(deviceId, date);
+    // Use accurate version that prefers queryUsageStats snapshots
+    const summary = await getDailySummaryAccurate(deviceId, date);
     console.log(`[UsageController] Daily summary for device ${deviceId}:`, {
       date: summary.date,
       totalSeconds: summary.totalSeconds,
       appCount: summary.byApp.length,
+      source: (summary as any).source || 'sessions',
     });
     res.json(summary);
   } catch (error) {
@@ -64,12 +100,14 @@ export const weeklySummary = async (req: Request, res: Response) => {
     if (!device) return res.status(404).json({ message: "Device not found" });
     ensureDeviceAccess(device.userId, req.user!);
 
-    const summary = await getWeeklySummary(deviceId, start);
+    // Use accurate version that prefers queryUsageStats snapshots
+    const summary = await getWeeklySummaryAccurate(deviceId, start);
     console.log(`[UsageController] Weekly summary for device ${deviceId}:`, {
       start: summary.start,
       end: summary.end,
       totalSeconds: summary.totalSeconds,
       appCount: summary.byApp.length,
+      source: (summary as any).source || 'sessions',
     });
     res.json(summary);
   } catch (error) {
@@ -90,12 +128,14 @@ export const customRangeSummary = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Both start and end dates are required" });
     }
 
-    const summary = await getCustomRangeSummary(deviceId, start, end);
+    // Use accurate version that prefers queryUsageStats snapshots
+    const summary = await getCustomRangeSummaryAccurate(deviceId, start, end);
     console.log(`[UsageController] Custom range summary for device ${deviceId}:`, {
       start: summary.start,
       end: summary.end,
       totalSeconds: summary.totalSeconds,
       appCount: summary.byApp.length,
+      source: (summary as any).source || 'sessions',
     });
     res.json(summary);
   } catch (error) {
@@ -117,7 +157,8 @@ export const dailySeries = async (req: Request, res: Response) => {
       ? Math.min(365, Math.max(7, Math.floor(parsedDays)))
       : 30;
 
-    const series = await getDailySeries(deviceId, safeDays);
+    // Use accurate version that prefers queryUsageStats snapshots
+    const series = await getDailySeriesAccurate(deviceId, safeDays);
     res.json({ deviceId, days: safeDays, series });
   } catch (error) {
     console.error("[UsageController] Error in dailySeries:", error);
@@ -129,12 +170,14 @@ export const dailySeries = async (req: Request, res: Response) => {
 export const aggregatedWeeklySummary = async (req: Request, res: Response) => {
   try {
     const { start } = req.query as { start?: string };
-    const summary = await getAggregatedWeeklySummary(req.user!, start);
+    // Use accurate version that prefers queryUsageStats snapshots
+    const summary = await getAggregatedWeeklySummaryAccurate(req.user!, start);
     console.log(`[UsageController] Aggregated weekly summary:`, {
       start: summary.start,
       end: summary.end,
       totalSeconds: summary.totalSeconds,
       appCount: summary.byApp.length,
+      source: (summary as any).source || 'sessions',
     });
     res.json(summary);
   } catch (error) {
@@ -151,7 +194,8 @@ export const aggregatedDailySeries = async (req: Request, res: Response) => {
       ? Math.min(365, Math.max(7, Math.floor(parsedDays)))
       : 30;
 
-    const series = await getAggregatedDailySeries(req.user!, safeDays);
+    // Use accurate version that prefers queryUsageStats snapshots
+    const series = await getAggregatedDailySeriesAccurate(req.user!, safeDays);
     res.json({ days: safeDays, series });
   } catch (error) {
     console.error("[UsageController] Error in aggregatedDailySeries:", error);
@@ -166,12 +210,14 @@ export const aggregatedCustomRangeSummary = async (req: Request, res: Response) 
       return res.status(400).json({ message: "Both start and end dates are required" });
     }
 
-    const summary = await getAggregatedCustomRangeSummary(req.user!, start, end);
+    // Use accurate version that prefers queryUsageStats snapshots
+    const summary = await getAggregatedCustomRangeSummaryAccurate(req.user!, start, end);
     console.log(`[UsageController] Aggregated custom range summary:`, {
       start: summary.start,
       end: summary.end,
       totalSeconds: summary.totalSeconds,
       appCount: summary.byApp.length,
+      source: (summary as any).source || 'sessions',
     });
     res.json(summary);
   } catch (error) {

@@ -43,7 +43,7 @@ const Login = () => {
             </svg>
           </div>
           <h1 className="text-3xl font-bold gradient-text">Welcome Back</h1>
-          <p className="mt-2 text-sm text-text-secondary">Sign in to access your Digital Wellbeing dashboard</p>
+          <p className="mt-2 text-sm text-text-secondary">Sign in to access your FocusGuard admin-dashboard</p>
         </div>
 
         {/* Login Card */}

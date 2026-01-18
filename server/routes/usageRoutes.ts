@@ -5,6 +5,7 @@ import {
   dailySeries, 
   dailySummary, 
   ingest, 
+  ingestDailySnapshot,
   weeklySummary,
   aggregatedWeeklySummary,
   aggregatedDailySeries,
@@ -54,6 +55,41 @@ router.post(
     }
 
     return ingest(req, res).catch(next);
+  }
+);
+
+// Daily usage snapshot endpoint - accurate data from Android's queryUsageStats() (same as Digital Wellbeing)
+router.post(
+  "/daily-snapshot",
+  validateRequest(
+    z.object({
+      body: z.object({
+        deviceIdentifier: z.string().min(3),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+        apps: z.array(z.object({
+          packageName: z.string().min(1),
+          appName: z.string().optional(),
+          totalMinutes: z.number().int().min(0),
+        })),
+      }),
+      params: z.object({}).optional(),
+      query: z.object({}).optional(),
+    })
+  ),
+  optionalAuthenticate,
+  (req, res, next) => {
+    const ingestionKey = process.env.INGESTION_API_KEY;
+    const hasJwtAuth = !!req.user;
+    const hasApiKey = ingestionKey && req.headers["x-api-key"] === ingestionKey;
+
+    if (!hasJwtAuth && !hasApiKey) {
+      if (ingestionKey) {
+        return res.status(401).json({ message: "Authentication required (JWT token or API key)" });
+      }
+      console.warn("[UsageRoutes] /daily-snapshot called without auth and no INGESTION_API_KEY set - allowing for development");
+    }
+
+    return ingestDailySnapshot(req, res).catch(next);
   }
 );
 
