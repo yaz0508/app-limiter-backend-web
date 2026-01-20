@@ -22,7 +22,6 @@ const Devices = () => {
   const [reassigningDevice, setReassigningDevice] = useState<Device | null>(null);
   const [deletingDevice, setDeletingDevice] = useState<Device | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
-  const [bulkReassignUserId, setBulkReassignUserId] = useState<string>("");
 
   const loadDevices = async () => {
     if (!token) return;
@@ -136,27 +135,6 @@ const Devices = () => {
     }
   };
 
-  const bulkReassign = async () => {
-    if (!token) return;
-    const ids = selectedDeviceIds;
-    if (ids.length === 0) return;
-    if (!bulkReassignUserId) {
-      showToast("Select a user to reassign to", "error");
-      return;
-    }
-    try {
-      for (const id of ids) {
-        // eslint-disable-next-line no-await-in-loop
-        await updateDevice(token, id, { userId: bulkReassignUserId });
-      }
-      showToast(`Reassigned ${ids.length} device(s)`, "success");
-      clearSelection();
-      setBulkReassignUserId("");
-      await loadDevices();
-    } catch (err) {
-      showToast((err as Error).message, "error");
-    }
-  };
 
   const formatLastSeen = (iso?: string | null) => {
     if (!iso) return "—";
@@ -229,25 +207,6 @@ const Devices = () => {
             Selected: <span className="font-semibold text-slate-900">{selectedDeviceIds.length}</span>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              value={bulkReassignUserId}
-              onChange={(e) => setBulkReassignUserId(e.target.value)}
-              className="rounded border px-3 py-2 text-sm"
-            >
-              <option value="">Reassign selected to…</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.email})
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={bulkReassign}
-              disabled={selectedDeviceIds.length === 0 || !bulkReassignUserId}
-              className="rounded bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Bulk Reassign
-            </button>
             <button
               onClick={bulkDelete}
               disabled={selectedDeviceIds.length === 0}
