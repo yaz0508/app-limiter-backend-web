@@ -21,7 +21,6 @@ const Devices = () => {
   const [osFilter, setOsFilter] = useState<string>("all");
   const [reassigningDevice, setReassigningDevice] = useState<Device | null>(null);
   const [deletingDevice, setDeletingDevice] = useState<Device | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
   const loadDevices = async () => {
     if (!token) return;
@@ -99,43 +98,6 @@ const Devices = () => {
     return filtered;
   }, [devices, searchQuery, osFilter]);
 
-  const selectedDeviceIds = useMemo(
-    () => Object.entries(selectedIds).filter(([, v]) => v).map(([id]) => id),
-    [selectedIds]
-  );
-
-  const allVisibleSelected =
-    filteredDevices.length > 0 && filteredDevices.every((d) => selectedIds[d.id]);
-
-  const toggleSelectAllVisible = () => {
-    const next: Record<string, boolean> = { ...selectedIds };
-    for (const d of filteredDevices) {
-      next[d.id] = !allVisibleSelected;
-    }
-    setSelectedIds(next);
-  };
-
-  const clearSelection = () => setSelectedIds({});
-
-  const bulkDelete = async () => {
-    if (!token) return;
-    const ids = selectedDeviceIds;
-    if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} device(s)? This cannot be undone.`)) return;
-    try {
-      for (const id of ids) {
-        // eslint-disable-next-line no-await-in-loop
-        await deleteDevice(token, id);
-      }
-      showToast(`Deleted ${ids.length} device(s)`, "success");
-      clearSelection();
-      await loadDevices();
-    } catch (err) {
-      showToast((err as Error).message, "error");
-    }
-  };
-
-
   const formatLastSeen = (iso?: string | null) => {
     if (!iso) return "—";
     const d = new Date(iso);
@@ -200,31 +162,6 @@ const Devices = () => {
         )}
       </div>
 
-      {/* Bulk actions */}
-      <div className="rounded-lg border bg-white p-3 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-slate-600">
-            Selected: <span className="font-semibold text-slate-900">{selectedDeviceIds.length}</span>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <button
-              onClick={bulkDelete}
-              disabled={selectedDeviceIds.length === 0}
-              className="rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Bulk Delete
-            </button>
-            <button
-              onClick={clearSelection}
-              disabled={selectedDeviceIds.length === 0}
-              className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
-            >
-              Clear selection
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Info banner about automatic registration */}
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
         <div className="flex items-start gap-3">
@@ -258,15 +195,6 @@ const Devices = () => {
           ) : (
             <Table
               headers={[
-                <div key="sel" className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={allVisibleSelected}
-                    onChange={toggleSelectAllVisible}
-                    aria-label="Select all visible devices"
-                  />
-                  <span>Select</span>
-                </div>,
                 "Name",
                 "Status",
                 "Last seen",
@@ -276,13 +204,6 @@ const Devices = () => {
                 "",
               ]}
               rows={filteredDevices.map((d) => [
-              <input
-                key="sel"
-                type="checkbox"
-                checked={!!selectedIds[d.id]}
-                onChange={() => setSelectedIds((prev) => ({ ...prev, [d.id]: !prev[d.id] }))}
-                aria-label={`Select device ${d.name}`}
-              />,
               d.name,
               <span
                 key="status"
