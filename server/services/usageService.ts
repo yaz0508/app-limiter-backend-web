@@ -21,6 +21,21 @@ function normalizePhDateKey(dateISO?: string): string {
     return new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+function addDaysToDateKey(dateKey: string, deltaDays: number): string {
+    const d = new Date(`${dateKey}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() + deltaDays);
+    return d.toISOString().slice(0, 10);
+}
+
+async function getLatestSnapshotDate(deviceId: string): Promise<string | null> {
+    const latest = await prisma.dailyUsageSnapshot.findFirst({
+        where: { deviceId },
+        orderBy: { date: "desc" },
+        select: { date: true },
+    });
+    return latest?.date ?? null;
+}
+
 function clipSecondsToRange(occurredAt: Date, durationSeconds: number, rangeStart: Date, rangeEnd: Date): number {
     const endMs = occurredAt.getTime();
     const durMs = Math.max(1, Math.round(durationSeconds)) * 1000;
@@ -643,7 +658,10 @@ export const ingestDailyUsageSnapshot = async (input: {
  * falling back to session-based calculation if not
  */
 export const getDailySummaryAccurate = async (deviceId: string, dateISO?: string) => {
-    const { start: startOfDay, end: endOfDay, dateKey } = phDayBounds(dateISO);
+    const latestSnapshotDate = dateISO ? null : await getLatestSnapshotDate(deviceId);
+    const dateKey = dateISO
+        ? dateISO
+        : latestSnapshotDate ?? new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
 
     // First, try to get snapshots (accurate data from queryUsageStats)
     const snapshots = await prisma.dailyUsageSnapshot.findMany({
@@ -691,21 +709,19 @@ export const getDailySummaryAccurate = async (deviceId: string, dateISO?: string
  * falling back to session-based calculation if not
  */
 export const getWeeklySummaryAccurate = async (deviceId: string, startDateISO?: string) => {
-    const startKey = startDateISO
-        ? startDateISO
-        : new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
-    const start = new Date(`${startKey}T00:00:00.000+08:00`);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    end.setHours(23, 59, 59, 999);
+    const latestSnapshotDate = startDateISO ? null : await getLatestSnapshotDate(deviceId);
+    const endKey = latestSnapshotDate ?? new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const startKey = startDateISO ?? addDaysToDateKey(endKey, -6);
+    const start = new Date(`${startKey}T00:00:00.000Z`);
+    const end = new Date(`${endKey}T23:59:59.999Z`);
 
     // Generate all date keys in the range
     const dateKeys: string[] = [];
-    const currentDate = new Date(start);
-    while (currentDate <= end) {
-        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
-        dateKeys.push(dateKey);
-        currentDate.setDate(currentDate.getDate() + 1);
+    let cursorKey = startKey;
+    while (true) {
+        dateKeys.push(cursorKey);
+        if (cursorKey === endKey) break;
+        cursorKey = addDaysToDateKey(cursorKey, 1);
     }
 
     // Get all snapshots for this device in the date range
@@ -850,19 +866,19 @@ export const getCustomRangeSummaryAccurate = async (
  * falling back to session-based calculation if not
  */
 export const getDailySeriesAccurate = async (deviceId: string, days: number) => {
-    const endKey = new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
-    const endDate = new Date(`${endKey}T23:59:59.999+08:00`);
-    const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - days);
-    startDate.setHours(0, 0, 0, 0);
+    const latestSnapshotDate = await getLatestSnapshotDate(deviceId);
+    const endKey = latestSnapshotDate ?? new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 10);
+    const startKey = addDaysToDateKey(endKey, -days);
+    const endDate = new Date(`${endKey}T23:59:59.999Z`);
+    const startDate = new Date(`${startKey}T00:00:00.000Z`);
 
     // Generate all date keys in the range
     const dateKeys: string[] = [];
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-        const dateKey = new Date(currentDate.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
-        dateKeys.push(dateKey);
-        currentDate.setDate(currentDate.getDate() + 1);
+    let cursorKey = startKey;
+    while (true) {
+        dateKeys.push(cursorKey);
+        if (cursorKey === endKey) break;
+        cursorKey = addDaysToDateKey(cursorKey, 1);
     }
 
     // Get all snapshots for this device in the date range
@@ -887,20 +903,17 @@ export const getDailySeriesAccurate = async (deviceId: string, days: number) => 
 
     // Generate series for all days in range (including days with no data)
     const series: Array<{ date: string; totalSeconds: number; totalMinutes: number; sessions: number }> = [];
-    const currentDate2 = new Date(startDate);
-
-    while (currentDate2 <= endDate) {
-        const dateKey = new Date(currentDate2.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
-        const entry = dateMap.get(dateKey) || { totalMinutes: 0 };
-
+    let cursorKey2 = startKey;
+    while (true) {
+        const entry = dateMap.get(cursorKey2) || { totalMinutes: 0 };
         series.push({
-            date: dateKey,
+            date: cursorKey2,
             totalSeconds: entry.totalMinutes * 60,
             totalMinutes: entry.totalMinutes,
             sessions: 0, // Sessions not tracked in snapshots
         });
-
-        currentDate2.setDate(currentDate2.getDate() + 1);
+        if (cursorKey2 === endKey) break;
+        cursorKey2 = addDaysToDateKey(cursorKey2, 1);
     }
 
     return series;
